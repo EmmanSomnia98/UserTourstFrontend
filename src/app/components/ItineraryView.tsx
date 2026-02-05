@@ -1,0 +1,247 @@
+import { useState } from 'react';
+import { Destination } from '@/app/types/destination';
+import { Card } from '@/app/components/ui/card';
+import { Button } from '@/app/components/ui/button';
+import { Badge } from '@/app/components/ui/badge';
+import { Separator } from '@/app/components/ui/separator';
+import { Calendar, Clock, MapPin, Trash2, Download, Share2, Save, Plus } from 'lucide-react';
+import { calculateItinerarySchedule } from '@/app/utils/recommendation';
+import { SavedItinerary } from '@/app/types/saved-itinerary';
+import { saveItinerary } from '@/app/utils/storage';
+
+interface ItineraryViewProps {
+  destinations: Destination[];
+  tripDays: number;
+  onRemoveDestination: (destinationId: string) => void;
+  onReset: () => void;
+  onSaveSuccess?: () => void;
+  allDestinations?: Destination[];
+  onAddDestination?: (destination: Destination) => void;
+}
+
+export function ItineraryView({
+  destinations,
+  tripDays,
+  onRemoveDestination,
+  onReset,
+  onSaveSuccess,
+  allDestinations,
+  onAddDestination
+}: ItineraryViewProps) {
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const schedule = calculateItinerarySchedule(destinations, tripDays);
+  
+  const totalCost = destinations.reduce((sum, dest) => sum + dest.estimatedCost, 0);
+  const totalDuration = destinations.reduce((sum, dest) => sum + dest.duration, 0);
+
+  const handleSave = () => {
+    const itineraryName = prompt('Give your itinerary a name:', `Bulusan Trip ${new Date().toLocaleDateString()}`);
+    
+    if (itineraryName) {
+      setIsSaving(true);
+      try {
+        const newItinerary: SavedItinerary = {
+          id: `itinerary_${Date.now()}`,
+          name: itineraryName,
+          destinations,
+          tripDays,
+          createdAt: new Date().toISOString(),
+          totalCost,
+          totalDuration
+        };
+        
+        saveItinerary(newItinerary);
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+        onSaveSuccess?.();
+      } catch (error) {
+        alert('Failed to save itinerary. Please try again.');
+      } finally {
+        setIsSaving(false);
+      }
+    }
+  };
+
+  const handleDownload = () => {
+    // Create a simple text version of the itinerary
+    let itineraryText = `Bulusan Travel Itinerary\n\n`;
+    itineraryText += `Total Duration: ${tripDays} days\n`;
+    itineraryText += `Total Cost: ₱${totalCost}\n`;
+    itineraryText += `Total Activity Hours: ${totalDuration}h\n\n`;
+    
+    schedule.forEach((dayDestinations, day) => {
+      itineraryText += `Day ${day}:\n`;
+      dayDestinations.forEach(dest => {
+        itineraryText += `  - ${dest.name} (${dest.duration}h, ₱${dest.estimatedCost})\n`;
+      });
+      itineraryText += `\n`;
+    });
+
+    const blob = new Blob([itineraryText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'bulusan-itinerary.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  if (destinations.length === 0) {
+    return (
+      <Card className="p-8 text-center">
+        <p className="text-gray-600">Your itinerary is empty. Add destinations to get started!</p>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Summary Card */}
+      <Card className="p-6">
+        <div className="space-y-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold">Your Bulusan Itinerary</h2>
+              <p className="text-gray-600 mt-1">{destinations.length} destinations planned</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleDownload}>
+                <Download className="w-4 h-4 mr-2" />
+                Download
+              </Button>
+              <Button variant="outline" size="sm">
+                <Share2 className="w-4 h-4 mr-2" />
+                Share
+              </Button>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center p-4 bg-blue-50 rounded-lg">
+              <Calendar className="w-6 h-6 mx-auto mb-2 text-blue-600" />
+              <div className="text-2xl font-semibold">{tripDays}</div>
+              <div className="text-sm text-gray-600">Days</div>
+            </div>
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <Clock className="w-6 h-6 mx-auto mb-2 text-green-600" />
+              <div className="text-2xl font-semibold">{totalDuration}h</div>
+              <div className="text-sm text-gray-600">Total Time</div>
+            </div>
+            <div className="text-center p-4 bg-purple-50 rounded-lg">
+              <MapPin className="w-6 h-6 mx-auto mb-2 text-purple-600" />
+              <div className="text-2xl font-semibold">₱{totalCost}</div>
+              <div className="text-sm text-gray-600">Est. Cost</div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Day by Day Schedule */}
+      {Array.from(schedule.entries()).map(([day, dayDestinations]) => (
+        <Card key={day} className="p-6">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center font-semibold">
+                {day}
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg">Day {day}</h3>
+                <p className="text-sm text-gray-600">
+                  {dayDestinations.reduce((sum, d) => sum + d.duration, 0)} hours of activities
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 ml-6 border-l-2 border-gray-200 pl-6">
+              {dayDestinations.map((dest, index) => (
+                <div key={dest.id} className="relative">
+                  <div className="absolute -left-8 top-4 w-4 h-4 bg-white border-2 border-blue-500 rounded-full"></div>
+                  
+                  <Card className="p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex gap-4 flex-1">
+                        <img
+                          src={dest.image}
+                          alt={dest.name}
+                          className="w-24 h-24 object-cover rounded-lg flex-shrink-0"
+                        />
+                        <div className="flex-1 space-y-2">
+                          <div>
+                            <h4 className="font-semibold">{dest.name}</h4>
+                            <p className="text-sm text-gray-600 line-clamp-2">{dest.description}</p>
+                          </div>
+                          
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {dest.type}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              {dest.difficulty}
+                            </Badge>
+                          </div>
+
+                          <div className="flex items-center gap-4 text-sm text-gray-600">
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-4 h-4" />
+                              <span>{dest.duration}h</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <MapPin className="w-4 h-4" />
+                              <span>₱{dest.estimatedCost}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onRemoveDestination(dest.id)}
+                        className="flex-shrink-0"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </Button>
+                    </div>
+                  </Card>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      ))}
+
+      {/* Actions */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="font-semibold">Ready to explore Bulusan?</h4>
+            <p className="text-sm text-gray-600 mt-1">
+              Save your itinerary or start planning a new trip
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={handleSave}
+              disabled={isSaving}
+              className={isSaving ? 'cursor-not-allowed' : ''}
+            >
+              {isSaving ? 'Saving...' : 'Save Itinerary'}
+            </Button>
+            <Button variant="outline" onClick={onReset}>
+              Start New Itinerary
+            </Button>
+          </div>
+        </div>
+        {saveSuccess && (
+          <div className="mt-4 text-sm text-green-500">
+            Itinerary saved successfully!
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
