@@ -1,7 +1,6 @@
 import { Destination, UserPreferences } from '@/app/types/destination';
 
-// Simulated user-item interaction matrix
-// In a real system, this would come from a database of user behavior
+// User-item interaction matrix (populate from the database in production)
 export interface UserInteraction {
   userId: string;
   destinationId: string;
@@ -11,47 +10,8 @@ export interface UserInteraction {
   activityLevel: string;
 }
 
-// Simulate historical user data for collaborative filtering
-const simulatedUserData: UserInteraction[] = [
-  // User 1: Adventure lover
-  { userId: 'u1', destinationId: '1', rating: 5, visited: true, interests: ['hiking', 'adventure'], activityLevel: 'active' },
-  { userId: 'u1', destinationId: '8', rating: 5, visited: true, interests: ['hiking', 'adventure'], activityLevel: 'active' },
-  { userId: 'u1', destinationId: '4', rating: 4, visited: true, interests: ['hiking', 'adventure'], activityLevel: 'active' },
-  { userId: 'u1', destinationId: '5', rating: 4, visited: true, interests: ['hiking', 'adventure'], activityLevel: 'active' },
-  
-  // User 2: Nature enthusiast
-  { userId: 'u2', destinationId: '2', rating: 5, visited: true, interests: ['nature', 'photography'], activityLevel: 'moderate' },
-  { userId: 'u2', destinationId: '4', rating: 5, visited: true, interests: ['nature', 'photography'], activityLevel: 'moderate' },
-  { userId: 'u2', destinationId: '9', rating: 5, visited: true, interests: ['nature', 'photography'], activityLevel: 'moderate' },
-  { userId: 'u2', destinationId: '3', rating: 4, visited: true, interests: ['nature', 'photography'], activityLevel: 'moderate' },
-  
-  // User 3: Relaxation seeker
-  { userId: 'u3', destinationId: '3', rating: 5, visited: true, interests: ['relaxation'], activityLevel: 'relaxed' },
-  { userId: 'u3', destinationId: '2', rating: 5, visited: true, interests: ['relaxation'], activityLevel: 'relaxed' },
-  { userId: 'u3', destinationId: '6', rating: 4, visited: true, interests: ['relaxation', 'culture'], activityLevel: 'relaxed' },
-  
-  // User 4: Waterfall chaser
-  { userId: 'u4', destinationId: '5', rating: 5, visited: true, interests: ['swimming', 'nature'], activityLevel: 'moderate' },
-  { userId: 'u4', destinationId: '10', rating: 5, visited: true, interests: ['swimming', 'nature'], activityLevel: 'moderate' },
-  { userId: 'u4', destinationId: '2', rating: 4, visited: true, interests: ['swimming', 'nature'], activityLevel: 'moderate' },
-  
-  // User 5: Cultural explorer
-  { userId: 'u5', destinationId: '6', rating: 5, visited: true, interests: ['culture', 'photography'], activityLevel: 'relaxed' },
-  { userId: 'u5', destinationId: '7', rating: 4, visited: true, interests: ['culture', 'photography'], activityLevel: 'relaxed' },
-  { userId: 'u5', destinationId: '4', rating: 4, visited: true, interests: ['culture', 'photography'], activityLevel: 'relaxed' },
-  
-  // User 6: Balanced traveler
-  { userId: 'u6', destinationId: '1', rating: 4, visited: true, interests: ['hiking', 'nature', 'photography'], activityLevel: 'moderate' },
-  { userId: 'u6', destinationId: '2', rating: 5, visited: true, interests: ['hiking', 'nature', 'photography'], activityLevel: 'moderate' },
-  { userId: 'u6', destinationId: '3', rating: 4, visited: true, interests: ['hiking', 'nature', 'photography'], activityLevel: 'moderate' },
-  { userId: 'u6', destinationId: '5', rating: 5, visited: true, interests: ['hiking', 'nature', 'photography'], activityLevel: 'moderate' },
-  
-  // User 7: Adventure + Nature
-  { userId: 'u7', destinationId: '1', rating: 5, visited: true, interests: ['hiking', 'adventure', 'nature'], activityLevel: 'active' },
-  { userId: 'u7', destinationId: '4', rating: 5, visited: true, interests: ['hiking', 'adventure', 'nature'], activityLevel: 'active' },
-  { userId: 'u7', destinationId: '8', rating: 5, visited: true, interests: ['hiking', 'adventure', 'nature'], activityLevel: 'active' },
-  { userId: 'u7', destinationId: '9', rating: 4, visited: true, interests: ['hiking', 'adventure', 'nature'], activityLevel: 'active' },
-];
+// Historical user data is expected from the database (empty during setup)
+const simulatedUserData: UserInteraction[] = [];
 
 /**
  * Calculate user similarity based on preferences

@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Destination, UserPreferences } from '@/app/types/destination';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
-import { destinations } from '@/app/data/destinations';
+import { fetchDestinations } from '@/app/api/destinations';
 import { getRecommendations, calculateContentScore } from '@/app/utils/recommendation';
 import { PreferenceForm } from '@/app/components/PreferenceForm';
 import { RecommendationsView } from '@/app/components/RecommendationsView';
@@ -18,14 +18,39 @@ export default function App() {
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [recommendations, setRecommendations] = useState<Destination[]>([]);
   const [itinerary, setItinerary] = useState<Destination[]>([]);
+  const [allDestinations, setAllDestinations] = useState<Destination[]>([]);
+  const [destinationsStatus, setDestinationsStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [recommendationScores, setRecommendationScores] = useState<Map<string, number>>(new Map());
   const [viewingSavedItinerary, setViewingSavedItinerary] = useState<SavedItinerary | null>(null);
+  const heroDestinations = allDestinations.slice(0, 3);
+  const showHeroGrid = heroDestinations.length === 3;
+
+  useEffect(() => {
+    let isMounted = true;
+    setDestinationsStatus('loading');
+    fetchDestinations()
+      .then((data) => {
+        if (!isMounted) return;
+        setAllDestinations(data);
+        setDestinationsStatus('idle');
+      })
+      .catch((error) => {
+        console.error('Failed to load destinations:', error);
+        if (!isMounted) return;
+        setAllDestinations([]);
+        setDestinationsStatus('error');
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handlePreferencesSubmit = (prefs: UserPreferences) => {
     setPreferences(prefs);
     
     // Automatically generate a complete itinerary using hybrid algorithm with knapsack optimization
-    const recommended = getRecommendations(destinations, prefs, 10); // Get up to 10 destinations
+    const recommended = getRecommendations(allDestinations, prefs, 10); // Get up to 10 destinations
     
     // Set the recommendations as the itinerary automatically
     setItinerary(recommended);
@@ -156,38 +181,36 @@ export default function App() {
             </div>
 
             {/* Hero Image Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
-              <div className="relative h-64 rounded-lg overflow-hidden shadow-lg">
-                <img
-                  src={destinations[0].image}
-                  alt="Mount Bulusan"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-                  <p className="text-white font-semibold">Volcanic Adventures</p>
+            {destinationsStatus === 'error' && (
+              <div className="max-w-4xl mx-auto rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                We couldn't load destinations from the server. Please try again in a moment.
+              </div>
+            )}
+
+            {showHeroGrid ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
+                {heroDestinations.map((destination) => (
+                  <div key={destination.id} className="relative h-64 rounded-lg overflow-hidden shadow-lg">
+                    <img
+                      src={destination.image}
+                      alt={destination.name}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
+                      <p className="text-white font-semibold">{destination.name}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="max-w-5xl mx-auto">
+                <div className="rounded-lg border border-dashed border-gray-300 bg-white/70 px-6 py-10 text-center text-gray-600">
+                  {destinationsStatus === 'loading'
+                    ? 'Loading destinations...'
+                    : 'Destinations will appear here once the admin adds them to the database.'}
                 </div>
               </div>
-              <div className="relative h-64 rounded-lg overflow-hidden shadow-lg">
-                <img
-                  src={destinations[1].image}
-                  alt="Lake Bulusan"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-                  <p className="text-white font-semibold">Serene Lakes</p>
-                </div>
-              </div>
-              <div className="relative h-64 rounded-lg overflow-hidden shadow-lg">
-                <img
-                  src={destinations[4].image}
-                  alt="Waterfalls"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-                  <p className="text-white font-semibold">Majestic Waterfalls</p>
-                </div>
-              </div>
-            </div>
+            )}
 
             {/* Features */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto text-left">
@@ -239,7 +262,7 @@ export default function App() {
         {currentView === 'recommendations' && preferences && (
           <RecommendationsView
             recommendations={recommendations}
-            allDestinations={destinations}
+            allDestinations={allDestinations}
             preferences={preferences}
             itinerary={itinerary}
             onAddToItinerary={handleAddToItinerary}
@@ -255,7 +278,7 @@ export default function App() {
             tripDays={preferences.duration}
             onRemoveDestination={handleRemoveFromItinerary}
             onReset={handleReset}
-            allDestinations={destinations}
+            allDestinations={allDestinations}
             onAddDestination={handleAddToItinerary}
           />
         )}
@@ -270,6 +293,7 @@ export default function App() {
         {currentView === 'edit-saved' && viewingSavedItinerary && (
           <EditableItineraryView
             savedItinerary={viewingSavedItinerary}
+            allDestinations={allDestinations}
             onBack={() => setCurrentView('saved-itineraries')}
             onUpdate={() => {
               // Refresh the saved itinerary list when updates are made

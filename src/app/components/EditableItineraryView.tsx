@@ -8,15 +8,15 @@ import { Separator } from '@/app/components/ui/separator';
 import { Calendar, Clock, MapPin, Trash2, Plus, Save, X, Edit2 } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { updateItineraryName, deleteItinerary, saveItinerary } from '@/app/utils/storage';
-import { destinations as allDestinations } from '@/app/data/destinations';
 
 interface EditableItineraryViewProps {
   savedItinerary: SavedItinerary;
+  allDestinations: Destination[];
   onBack: () => void;
   onUpdate: () => void;
 }
 
-export function EditableItineraryView({ savedItinerary, onBack, onUpdate }: EditableItineraryViewProps) {
+export function EditableItineraryView({ savedItinerary, allDestinations, onBack, onUpdate }: EditableItineraryViewProps) {
   const [destinations, setDestinations] = useState<Destination[]>(savedItinerary.destinations);
   const [tripDays, setTripDays] = useState(savedItinerary.tripDays);
   const [isEditingName, setIsEditingName] = useState(false);
