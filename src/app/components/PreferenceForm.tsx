@@ -18,11 +18,10 @@ const interestOptionsWithSubs = [
     label: 'Nature', 
     icon: Mountain,
     subInterests: [
-      'Rainforest exploration',
-      'Wildlife viewing',
-      'Botanical gardens',
-      'Scenic views',
-      'National parks'
+      'Eco-tours',
+      'Wilderness trekking',
+      'Volcanic sites',
+      'Caves and canyons'
     ]
   },
   { 
@@ -30,11 +29,10 @@ const interestOptionsWithSubs = [
     label: 'Diving and Marine Sports', 
     icon: Waves,
     subInterests: [
-      'Landscape photography',
-      'Wildlife photography',
-      'Nature photography',
-      'Sunset/sunrise shots',
-      'Cultural photography'
+      'Scuba diving',
+      'Snorkeling',
+      'Wreck diving',
+      'Freediving'
     ]
   },
   { 
@@ -42,11 +40,10 @@ const interestOptionsWithSubs = [
     label: 'Sun and Beach', 
     icon: Sun,
     subInterests: [
-      'Natural pools',
-      'Waterfalls',
-      'Lakes',
-      'Rivers',
-      'Beach swimming'
+      'Island hopping',
+      'Beach resorts',
+      'Surfing and skimboarding',
+      'Coastal relaxation'
     ]
   },
   { 
@@ -54,11 +51,10 @@ const interestOptionsWithSubs = [
     label: 'Health and Wellness', 
     icon: Heart,
     subInterests: [
-      'Hot springs',
-      'Spa & wellness',
-      'Meditation spots',
-      'Peaceful retreats',
-      'Scenic picnics'
+      'Spa and retreats',
+      'Medical tourism',
+      'Retirement villages',
+      'Beauty and wellness services'
     ]
   },
   { 
@@ -103,16 +99,38 @@ const interestOptionsWithSubs = [
       'Ferry travel',
       'Water taxis'
     ]
+  },
+  {
+    id: 'leisure',
+    label: 'Leisure and Entertainment',
+    icon: Heart,
+    subInterests: [
+      'Theme parks',
+      'Casinos',
+      'Shopping and retail',
+      'Nightlife and bars'
+    ]
   }
 ];
 
 export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
+  const [planningMode, setPlanningMode] = useState<'preferences' | 'budget'>('preferences');
   const [interests, setInterests] = useState<string[]>([]);
   const [expandedInterests, setExpandedInterests] = useState<string[]>([]);
   const [activityLevel, setActivityLevel] = useState<'relaxed' | 'moderate' | 'active'>('moderate');
   const [budget, setBudget] = useState<string>('1000');
   const [duration, setDuration] = useState<string>('3');
-  const [travelStyle, setTravelStyle] = useState<string[]>([]);
+  const [travelStyle, setTravelStyle] = useState<string[]>(['solo']);
+  const [collaborators, setCollaborators] = useState<string[]>([]);
+  const preferenceBudgetFallback = 100000;
+  const selectedTravelStyle = travelStyle[0] ?? 'solo';
+  const collaboratorLimit = selectedTravelStyle === 'couple' ? 1
+    : selectedTravelStyle === 'family_group' ? Number.POSITIVE_INFINITY
+    : 0;
+  const completedCollaborators = collaborators.filter(name => name.trim() !== '');
+  const collaboratorInputCount = collaboratorLimit === 0
+    ? 0
+    : (collaboratorLimit === 1 ? 1 : Math.max(1, completedCollaborators.length + 1));
 
   const toggleInterest = (interest: string) => {
     const isCurrentlySelected = interests.includes(interest);
@@ -153,17 +171,38 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
   };
 
   const toggleTravelStyle = (style: string) => {
-    setTravelStyle(prev =>
-      prev.includes(style)
-        ? prev.filter(s => s !== style)
-        : [...prev, style]
-    );
+    const nextStyle = selectedTravelStyle === style ? 'solo' : style;
+    setTravelStyle([nextStyle]);
+    if (nextStyle === 'couple') {
+      setCollaborators(prev => prev.slice(0, 1));
+      if (collaborators.length === 0) {
+        setCollaborators(['']);
+      }
+    } else if (nextStyle === 'family_group') {
+      setCollaborators(prev => {
+        const next = [...prev];
+        while (next.length < 1) next.push('');
+        return next;
+      });
+    } else {
+      setCollaborators([]);
+    }
+  };
+
+  const handleCollaboratorChange = (index: number, value: string) => {
+    setCollaborators(prev => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const budgetNum = parseInt(budget) || 1000;
+    const budgetNum = planningMode === 'budget'
+      ? (parseInt(budget) || 1000)
+      : preferenceBudgetFallback;
     const durationNum = parseInt(duration) || 3;
     
     onSubmit({
@@ -182,6 +221,102 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
           <h2 className="text-2xl mb-2">Tell us about your travel preferences</h2>
           <p className="text-gray-600">We'll create personalized recommendations just for you</p>
         </div>
+
+        {/* Planning Mode */}
+        <div className="space-y-4">
+          <Label className="text-lg">Plan By</Label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setPlanningMode('preferences')}
+              className={`rounded-lg border-2 px-4 py-3 text-left transition-all ${
+                planningMode === 'preferences'
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <p className="text-sm font-semibold">Preferences</p>
+              <p className="text-xs text-gray-600">
+                We focus on your interests and activity level.
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPlanningMode('budget')}
+              className={`rounded-lg border-2 px-4 py-3 text-left transition-all ${
+                planningMode === 'budget'
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <p className="text-sm font-semibold">Budget</p>
+              <p className="text-xs text-gray-600">
+                We prioritize activities within your budget.
+              </p>
+            </button>
+          </div>
+        </div>
+        
+        {/* Travel Style */}
+        <div className="space-y-4">
+          <Label className="text-lg">Travel Style</Label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {['solo', 'couple', 'family_group'].map(style => {
+              const isSelected = selectedTravelStyle === style;
+              const label = style === 'family_group' ? 'family/group' : style;
+              return (
+                <button
+                  key={style}
+                  type="button"
+                  onClick={() => toggleTravelStyle(style)}
+                  className={`rounded-lg border-2 px-4 py-3 text-left transition-all capitalize ${
+                    isSelected
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                  }`}
+                >
+                  <p className="text-sm font-semibold">{label}</p>
+                  <p className="text-xs text-gray-600">
+                    {style === 'solo' && 'Just you.'}
+                    {style === 'couple' && 'You + 1 traveler.'}
+                    {style === 'family_group' && 'Add travelers as needed.'}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {collaboratorLimit > 0 && (
+          <div className="space-y-4">
+            <Label className="text-lg">Collaborators</Label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {Array.from({ length: collaboratorInputCount }).map((_, index) => {
+                const value = collaborators[index] ?? '';
+                const completed = value.trim() !== '';
+                return (
+                  <div key={`collaborator-${index}`} className="space-y-2">
+                    <Input
+                      type="text"
+                      value={value}
+                      onChange={(e) => handleCollaboratorChange(index, e.target.value)}
+                      placeholder={`Traveler ${index + 1} name`}
+                      className="text-sm"
+                    />
+                    {completed && (
+                      <p className="text-xs text-gray-600">
+                        Username: {value.trim()}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-sm text-gray-600">
+              Add travelers who will join the trip.
+            </p>
+          </div>
+        )}
 
         {/* Interests with Sub-interests */}
         <div className="space-y-4">
@@ -252,54 +387,27 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
           </div>
         </div>
 
-        {/* Activity Level */}
-        <div className="space-y-4">
-          <Label className="text-lg">Activity Level</Label>
-          <div className="grid grid-cols-3 gap-3">
-            {['relaxed', 'moderate', 'active'].map(level => (
-              <button
-                key={level}
-                type="button"
-                onClick={() => setActivityLevel(level as any)}
-                className={`p-4 rounded-lg border-2 transition-all ${
-                  activityLevel === level
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <div className="text-center">
-                  <div className="capitalize">{level}</div>
-                  <div className="text-xs text-gray-600 mt-1">
-                    {level === 'relaxed' && 'Easy-going pace'}
-                    {level === 'moderate' && 'Balanced activities'}
-                    {level === 'active' && 'High energy'}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Budget Input */}
-        <div className="space-y-4">
-          <Label htmlFor="budget" className="text-lg">Budget per Activity (₱)</Label>
-          <div className="space-y-2">
-            <Input
-              id="budget"
-              type="number"
-              min="0"
-              step="100"
-              value={budget}
-              onChange={(e) => setBudget(e.target.value)}
-              placeholder="Enter your budget per activity"
-              className="text-lg"
-            />
-            <p className="text-sm text-gray-600">
-              Set your maximum budget per activity. Activities within this range will be prioritized.
-            </p>
+        {planningMode === 'budget' && (
+          <div className="space-y-4">
+            <Label htmlFor="budget" className="text-lg">Budget per Activity (₱)</Label>
+            <div className="space-y-2">
+              <Input
+                id="budget"
+                type="number"
+                min="0"
+                step="100"
+                value={budget}
+                onChange={(e) => setBudget(e.target.value)}
+                placeholder="Enter your budget per activity"
+                className="text-lg"
+              />
+              <p className="text-sm text-gray-600">
+                Set your maximum budget per activity. Activities within this range will be prioritized.
+              </p>
+            </div>
           </div>
-        </div>
-
+        )}
         {/* Duration Input */}
         <div className="space-y-4">
           <Label htmlFor="duration" className="text-lg">Trip Duration (days)</Label>
@@ -317,28 +425,6 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
             <p className="text-sm text-gray-600">
               How many days will you be staying in Bulusan? (1-30 days)
             </p>
-          </div>
-        </div>
-
-        {/* Travel Style */}
-        <div className="space-y-4">
-          <Label className="text-lg">Travel Style (Select all that apply)</Label>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {['solo', 'couple', 'family', 'group'].map(style => (
-              <div key={style} className="flex items-center space-x-2">
-                <Checkbox
-                  id={style}
-                  checked={travelStyle.includes(style)}
-                  onCheckedChange={() => toggleTravelStyle(style)}
-                />
-                <label
-                  htmlFor={style}
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 capitalize cursor-pointer"
-                >
-                  {style}
-                </label>
-              </div>
-            ))}
           </div>
         </div>
 

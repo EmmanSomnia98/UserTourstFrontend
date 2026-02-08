@@ -10,6 +10,7 @@ import { SavedItinerariesView } from '@/app/components/SavedItinerariesView';
 import { EditableItineraryView } from '@/app/components/EditableItineraryView';
 import { Button } from '@/app/components/ui/button';
 import { MapPin, Sparkles, BookOpen } from 'lucide-react';
+import backgroundImage from '@/assets/bulusan-lake.jpg';
 
 type AppView = 'welcome' | 'preferences' | 'itinerary' | 'saved-itineraries' | 'edit-saved' | 'recommendations';
 
@@ -123,7 +124,14 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
+    <div className="min-h-screen relative overflow-hidden bg-slate-50">
+      <div
+        className="absolute inset-0 bg-cover bg-center blur-0-px scale-105"
+        style={{ backgroundImage: `url(${backgroundImage})` }}
+        aria-hidden="true"
+      />
+      <div className="absolute inset-0 bg-white/30" aria-hidden="true" />
+      <div className="relative z-10">
       {/* Header */}
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -173,7 +181,7 @@ export default function App() {
               <h2 className="text-5xl font-bold text-gray-900">
                 Discover Bulusan, Sorsogon
               </h2>
-              <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              <p className="text-xl text-black-600 font-medium max-w-3xl mx-auto">
                 Let our hybrid recommendation system create a personalized travel itinerary 
                 based on your preferences, interests, and travel style. Experience the best of 
                 Bulusan's natural wonders, cultural heritage, and adventure destinations.
@@ -312,6 +320,7 @@ export default function App() {
           </div>
         </div>
       </footer>
+      </div>
     </div>
   );
 }

@@ -14,6 +14,6 @@ function extractDestinations(payload: DestinationPayload): Destination[] {
 }
 
 export async function fetchDestinations(): Promise<Destination[]> {
-  const payload = await apiGet<DestinationPayload>('/destinations');
+  const payload = await apiGet<DestinationPayload>('/api/destinations');
   return extractDestinations(payload);
 }
