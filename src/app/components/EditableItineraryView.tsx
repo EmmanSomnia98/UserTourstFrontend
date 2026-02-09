@@ -5,6 +5,7 @@ import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Separator } from '@/app/components/ui/separator';
+import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { Calendar, Clock, MapPin, Trash2, Plus, Save, X, Edit2 } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { updateItineraryName, deleteItinerary, saveItinerary } from '@/app/utils/storage';
@@ -23,10 +24,11 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
   const [itineraryName, setItineraryName] = useState(savedItinerary.name);
   const [showAddDestinations, setShowAddDestinations] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const getDuration = (value: number) => (Number.isFinite(value) ? value : 0);
 
   const schedule = calculateItinerarySchedule(destinations, tripDays);
   const totalCost = destinations.reduce((sum, dest) => sum + dest.estimatedCost, 0);
-  const totalDuration = destinations.reduce((sum, dest) => sum + dest.duration, 0);
+  const totalDuration = destinations.reduce((sum, dest) => sum + getDuration(dest.duration), 0);
 
   // Get destinations not already in itinerary
   const availableDestinations = allDestinations.filter(
@@ -180,8 +182,8 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
 
         {showAddDestinations && availableDestinations.length > 0 && (
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {availableDestinations.map((dest) => (
-              <Card key={dest.id} className="p-4 hover:shadow-md transition-shadow">
+            {availableDestinations.map((dest, index) => (
+              <Card key={dest.id ?? `${dest.name}-${index}`} className="p-4 hover:shadow-md transition-shadow">
                 <div className="flex gap-4">
                   <img
                     src={dest.image}
@@ -231,14 +233,19 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
                 <div>
                   <h3 className="font-semibold text-lg">Day {day}</h3>
                   <p className="text-sm text-gray-600">
-                    {dayDestinations.reduce((sum, d) => sum + d.duration, 0)} hours of activities
+                    {dayDestinations.reduce((sum, d) => sum + getDuration(d.duration), 0)} hours of activities
                   </p>
                 </div>
               </div>
 
               <div className="space-y-3 ml-6 border-l-2 border-gray-200 pl-6">
-                {dayDestinations.map((dest) => (
-                  <div key={dest.id} className="relative">
+                {dayDestinations.length === 0 && (
+                  <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                    No activities scheduled for this day yet.
+                  </div>
+                )}
+                {dayDestinations.map((dest, index) => (
+                  <div key={dest.id ?? `${dest.name}-${day}-${index}`} className="relative">
                     <div className="absolute -left-8 top-4 w-4 h-4 bg-white border-2 border-blue-500 rounded-full"></div>
                     
                     <Card className="p-4 hover:shadow-md transition-shadow">
@@ -267,17 +274,18 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
                             <div className="flex items-center gap-4 text-sm text-gray-600">
                               <div className="flex items-center gap-1">
                                 <Clock className="w-4 h-4" />
-                                <span>{dest.duration}h</span>
+                                <span>{getDuration(dest.duration)}h</span>
                               </div>
                               <div className="flex items-center gap-1">
                                 <MapPin className="w-4 h-4" />
                                 <span>₱{dest.estimatedCost}</span>
                               </div>
                             </div>
-                          </div>
+                          <TravelModeBadges destination={dest} />
                         </div>
+                      </div>
 
-                        <Button
+                      <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleRemoveDestination(dest.id)}

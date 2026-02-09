@@ -67,8 +67,8 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
       {/* Saved Itineraries Grid */}
       {savedItineraries.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {savedItineraries.map((itinerary) => (
-            <Card key={itinerary.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+          {savedItineraries.map((itinerary, index) => (
+            <Card key={itinerary.id ?? `${itinerary.name}-${index}`} className="overflow-hidden hover:shadow-lg transition-shadow">
               {/* Card Header with Image */}
               <div className="relative h-48 bg-gradient-to-br from-blue-400 to-green-400">
                 {itinerary.destinations[0]?.image && (
@@ -112,8 +112,8 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
                 <div className="pt-2">
                   <p className="text-xs text-gray-500 mb-2">Includes:</p>
                   <div className="flex flex-wrap gap-1">
-                    {itinerary.destinations.slice(0, 3).map((dest) => (
-                      <Badge key={dest.id} variant="outline" className="text-xs">
+                    {itinerary.destinations.slice(0, 3).map((dest, destIndex) => (
+                      <Badge key={dest.id ?? `${dest.name}-${destIndex}`} variant="outline" className="text-xs">
                         {dest.name}
                       </Badge>
                     ))}

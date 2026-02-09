@@ -161,8 +161,10 @@ export function itemBasedCF(
     let score = 0;
     
     // Find destinations that match user interests
-    const interestMatch = dest.interests.some(interest =>
-      preferences.interests.some(userInterest =>
+    const destinationInterests = dest.interests ?? [];
+    const userInterests = preferences.interests ?? [];
+    const interestMatch = destinationInterests.some(interest =>
+      userInterests.some(userInterest =>
         interest.toLowerCase().includes(userInterest.toLowerCase()) ||
         userInterest.toLowerCase().includes(interest.toLowerCase())
       )

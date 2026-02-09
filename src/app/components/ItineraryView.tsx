@@ -4,6 +4,7 @@ import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Separator } from '@/app/components/ui/separator';
+import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { Calendar, Clock, MapPin, Trash2, Download, Share2, Save, Plus } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
@@ -30,10 +31,12 @@ export function ItineraryView({
 }: ItineraryViewProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const getDuration = (value: number) => (Number.isFinite(value) ? value : 0);
   const schedule = calculateItinerarySchedule(destinations, tripDays);
+  const emptyDays = Array.from(schedule.entries()).filter(([, dayDestinations]) => dayDestinations.length === 0).length;
   
   const totalCost = destinations.reduce((sum, dest) => sum + dest.estimatedCost, 0);
-  const totalDuration = destinations.reduce((sum, dest) => sum + dest.duration, 0);
+  const totalDuration = destinations.reduce((sum, dest) => sum + getDuration(dest.duration), 0);
 
   const handleSave = () => {
     const itineraryName = prompt('Give your itinerary a name:', `Bulusan Trip ${new Date().toLocaleDateString()}`);
@@ -119,6 +122,13 @@ export function ItineraryView({
 
           <Separator />
 
+          {emptyDays > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              We couldn’t fill {emptyDays} {emptyDays === 1 ? 'day' : 'days'} with activities. Add more destinations
+              or adjust your preferences to see a fuller schedule.
+            </div>
+          )}
+
           <div className="grid grid-cols-3 gap-4">
             <div className="text-center p-4 bg-blue-50 rounded-lg">
               <Calendar className="w-6 h-6 mx-auto mb-2 text-blue-600" />
@@ -150,14 +160,19 @@ export function ItineraryView({
               <div>
                 <h3 className="font-semibold text-lg">Day {day}</h3>
                 <p className="text-sm text-gray-600">
-                  {dayDestinations.reduce((sum, d) => sum + d.duration, 0)} hours of activities
+                  {dayDestinations.reduce((sum, d) => sum + getDuration(d.duration), 0)} hours of activities
                 </p>
               </div>
             </div>
 
             <div className="space-y-3 ml-6 border-l-2 border-gray-200 pl-6">
+              {dayDestinations.length === 0 && (
+                <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                  No activities scheduled for this day yet.
+                </div>
+              )}
               {dayDestinations.map((dest, index) => (
-                <div key={dest.id} className="relative">
+                <div key={dest.id ?? `${dest.name}-${day}-${index}`} className="relative">
                   <div className="absolute -left-8 top-4 w-4 h-4 bg-white border-2 border-blue-500 rounded-full"></div>
                   
                   <Card className="p-4 hover:shadow-md transition-shadow">
@@ -186,13 +201,14 @@ export function ItineraryView({
                           <div className="flex items-center gap-4 text-sm text-gray-600">
                             <div className="flex items-center gap-1">
                               <Clock className="w-4 h-4" />
-                              <span>{dest.duration}h</span>
+                              <span>{getDuration(dest.duration)}h</span>
                             </div>
                             <div className="flex items-center gap-1">
                               <MapPin className="w-4 h-4" />
                               <span>₱{dest.estimatedCost}</span>
                             </div>
                           </div>
+                          <TravelModeBadges destination={dest} />
                         </div>
                       </div>
 

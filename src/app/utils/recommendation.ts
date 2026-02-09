@@ -15,10 +15,12 @@ import {
  */
 export function calculateContentScore(destination: Destination, preferences: UserPreferences): number {
   let score = 0;
+  const destinationInterests = destination.interests ?? [];
+  const userInterests = preferences.interests ?? [];
   
   // Interest matching (highest weight) - exact and fuzzy matching
-  const interestMatches = destination.interests.filter(interest =>
-    preferences.interests.some(userInterest =>
+  const interestMatches = destinationInterests.filter(interest =>
+    userInterests.some(userInterest =>
       interest.toLowerCase().includes(userInterest.toLowerCase()) ||
       userInterest.toLowerCase().includes(interest.toLowerCase())
     )
@@ -107,6 +109,9 @@ export function getRecommendations(
   preferences: UserPreferences,
   limit: number = 6
 ): Destination[] {
+  const desiredMinItems = Math.max(3, Math.floor(preferences.duration));
+  const desiredMaxItems = Math.max(limit, desiredMinItems);
+  const safeLimit = Math.min(desiredMaxItems, allDestinations.length);
   // Step 1: Calculate content-based scores
   const contentScores = new Map<string, number>();
   allDestinations.forEach(dest => {
@@ -149,31 +154,35 @@ export function getRecommendations(
   });
   
   // Step 5: Create knapsack items with hybrid scores
+  const costScale = 100;
   const knapsackItems: KnapsackItem[] = allDestinations.map(dest => ({
     destination: dest,
     value: hybridScores.get(dest.id) || 0,
-    weight: dest.estimatedCost
+    weight: Math.max(1, Math.ceil(dest.estimatedCost / costScale)),
+    durationWeight: Math.max(1, Math.ceil(dest.duration))
   }));
   
   // Step 6: Apply knapsack optimization with constraints
   const totalBudget = preferences.budget * Math.min(limit * 1.5, 10); // Total budget for all activities
   const totalDuration = preferences.duration * 8; // 8 hours per day
+  const cappedBudget = Math.min(totalBudget, 50000);
+  const scaledBudget = Math.max(1, Math.floor(cappedBudget / costScale));
   
   const optimizedDestinations = multiConstraintKnapsack(
     knapsackItems,
     {
-      maxBudget: totalBudget,
+      maxBudget: scaledBudget,
       maxDuration: totalDuration,
-      minItems: Math.min(3, limit),
-      maxItems: limit
+      minItems: Math.min(desiredMinItems, safeLimit),
+      maxItems: safeLimit
     },
     0.3 // Diversity weight
   );
   
   // Step 7: If knapsack returned fewer items than desired, fill with top-ranked items
-  if (optimizedDestinations.length < limit) {
+  if (optimizedDestinations.length < safeLimit) {
     const ranked = fractionalKnapsackRanking(knapsackItems);
-    const remainingSlots = limit - optimizedDestinations.length;
+    const remainingSlots = safeLimit - optimizedDestinations.length;
     
     let added = 0;
     for (const item of ranked) {
@@ -197,7 +206,7 @@ export function getRecommendations(
     return scoreB - scoreA;
   });
   
-  return finalRanked.slice(0, limit);
+  return finalRanked.slice(0, safeLimit);
 }
 
 /**
@@ -209,6 +218,16 @@ export function calculateItinerarySchedule(
   tripDays: number
 ): Map<number, Destination[]> {
   const schedule = new Map<number, Destination[]>();
+  const totalDays = Math.max(1, Math.floor(tripDays));
+
+  for (let day = 1; day <= totalDays; day++) {
+    schedule.set(day, []);
+  }
+
+  const getDuration = (dest: Destination) => {
+    const value = Number(dest.duration);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  };
   
   // Sort destinations intelligently:
   // 1. Challenging activities first (when energy is highest)
@@ -225,7 +244,7 @@ export function calculateItinerarySchedule(
     }
     
     // Duration as secondary
-    return b.duration - a.duration;
+    return getDuration(b) - getDuration(a);
   });
   
   let currentDay = 1;
@@ -234,19 +253,20 @@ export function calculateItinerarySchedule(
   const minHoursPerDay = 3; // Minimum to make a day worthwhile
   
   sorted.forEach(dest => {
-    if (currentDay > tripDays) return;
+    if (currentDay > totalDays) return;
+    const duration = getDuration(dest);
     
     // Check if adding this destination would exceed daily limit
-    if (currentDayHours + dest.duration > maxHoursPerDay && currentDayHours >= minHoursPerDay) {
+    if (currentDayHours + duration > maxHoursPerDay && currentDayHours >= minHoursPerDay) {
       currentDay++;
       currentDayHours = 0;
     }
     
-    if (currentDay <= tripDays) {
+    if (currentDay <= totalDays) {
       const dayDestinations = schedule.get(currentDay) || [];
       dayDestinations.push(dest);
       schedule.set(currentDay, dayDestinations);
-      currentDayHours += dest.duration;
+      currentDayHours += duration;
     }
   });
   
@@ -287,8 +307,10 @@ export function getRecommendationScores(
   };
   
   // Interest matching
-  const interestMatches = destination.interests.filter(interest =>
-    preferences.interests.some(userInterest =>
+  const destinationInterests = destination.interests ?? [];
+  const userInterests = preferences.interests ?? [];
+  const interestMatches = destinationInterests.filter(interest =>
+    userInterests.some(userInterest =>
       interest.toLowerCase().includes(userInterest.toLowerCase()) ||
       userInterest.toLowerCase().includes(interest.toLowerCase())
     )

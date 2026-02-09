@@ -122,7 +122,10 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
   const [duration, setDuration] = useState<string>('3');
   const [travelStyle, setTravelStyle] = useState<string[]>(['solo']);
   const [collaborators, setCollaborators] = useState<string[]>([]);
-  const preferenceBudgetFallback = 100000;
+  const [showInterestError, setShowInterestError] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const preferenceBudgetFallback = 5000;
   const selectedTravelStyle = travelStyle[0] ?? 'solo';
   const collaboratorLimit = selectedTravelStyle === 'couple' ? 1
     : selectedTravelStyle === 'family_group' ? Number.POSITIVE_INFINITY
@@ -145,6 +148,7 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
       // Add main interest and expand to show sub-interests
       setInterests(prev => [...prev, interest]);
       setExpandedInterests(prev => [...prev, interest]);
+      setShowInterestError(false);
     }
   };
 
@@ -155,8 +159,10 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
       } else {
         // Make sure main interest is also selected
         if (!prev.includes(mainInterest)) {
+          setShowInterestError(false);
           return [...prev, mainInterest, subInterest];
         }
+        setShowInterestError(false);
         return [...prev, subInterest];
       }
     });
@@ -199,19 +205,33 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
+
+    if (interests.length === 0) {
+      setShowInterestError(true);
+      return;
+    }
+
+    setIsSubmitting(true);
     
     const budgetNum = planningMode === 'budget'
       ? (parseInt(budget) || 1000)
       : preferenceBudgetFallback;
     const durationNum = parseInt(duration) || 3;
     
-    onSubmit({
-      interests,
-      activityLevel,
-      budget: budgetNum,
-      duration: durationNum,
-      travelStyle,
-    });
+    try {
+      onSubmit({
+        interests,
+        activityLevel,
+        budget: budgetNum,
+        duration: durationNum,
+        travelStyle,
+      });
+    } catch (error) {
+      console.error('Failed to submit preferences:', error);
+      setSubmitError('We could not generate your itinerary. Please try again.');
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -219,7 +239,7 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
       <form onSubmit={handleSubmit} className="space-y-8">
         <div>
           <h2 className="text-2xl mb-2">Tell us about your travel preferences</h2>
-          <p className="text-gray-600">We'll create personalized recommendations just for you</p>
+          <p className="text-gray-600">We'll create personalized itineraries just for you</p>
         </div>
 
         {/* Planning Mode */}
@@ -321,6 +341,16 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
         {/* Interests with Sub-interests */}
         <div className="space-y-4">
           <Label className="text-lg">What interests you? (Select all that apply)</Label>
+          {showInterestError && (
+            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              Please select at least one interest to continue.
+            </p>
+          )}
+          {submitError && (
+            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {submitError}
+            </p>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {interestOptionsWithSubs.map(option => {
               const Icon = option.icon;
@@ -428,8 +458,8 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
           </div>
         </div>
 
-        <Button type="submit" size="lg" className="w-full" disabled={interests.length === 0}>
-          Get My Personalized Itinerary
+        <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
+          {isSubmitting ? 'Generating Itinerary...' : 'Get My Personalized Itinerary'}
         </Button>
       </form>
     </Card>

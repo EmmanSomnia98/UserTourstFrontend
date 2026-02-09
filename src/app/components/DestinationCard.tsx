@@ -2,6 +2,7 @@ import { Destination } from '@/app/types/destination';
 import { Card } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
+import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { Star, Clock, TrendingUp, MapPin, Plus, Check, Info } from 'lucide-react';
 
 interface DestinationCardProps {
@@ -80,6 +81,8 @@ export function DestinationCard({
             <span>₱{destination.estimatedCost}</span>
           </div>
         </div>
+
+        <TravelModeBadges destination={destination} />
 
         <div className="flex flex-wrap gap-1">
           {destination.interests.slice(0, 3).map(interest => (

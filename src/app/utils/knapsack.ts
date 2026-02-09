@@ -3,7 +3,8 @@ import { Destination } from '@/app/types/destination';
 export interface KnapsackItem {
   destination: Destination;
   value: number; // recommendation score
-  weight: number; // could be cost or duration
+  weight: number; // cost weight (can be scaled)
+  durationWeight?: number; // duration weight (can be scaled)
 }
 
 export interface KnapsackConstraints {
@@ -42,8 +43,8 @@ export function knapsackOptimization(
   // Fill the DP table
   for (let i = 0; i < n; i++) {
     const item = items[i];
-    const cost = Math.floor(item.destination.estimatedCost);
-    const duration = Math.floor(item.destination.duration);
+    const cost = Math.floor(item.weight);
+    const duration = Math.floor(item.durationWeight ?? item.destination.duration);
     const value = item.value;
     
     // Traverse in reverse to avoid using same item multiple times

@@ -7,10 +7,11 @@
 
         "jsx": "react-jsx",
         "target": "ESNext",
+        "module": "ESNext",
         "moduleResolution": "bundler",
         "allowImportingTsExtensions": true,
         "noEmit": true,
         "allowSyntheticDefaultImports": true
     }
-  }
-  
+}
+

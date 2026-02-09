@@ -4,6 +4,8 @@ import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { fetchDestinations } from '@/app/api/destinations';
 import { getRecommendations, calculateContentScore } from '@/app/utils/recommendation';
 import { PreferenceForm } from '@/app/components/PreferenceForm';
+import { UserLogin } from '@/app/components/UserLogin';
+import { UserSignup } from '@/app/components/UserSignup';
 import { RecommendationsView } from '@/app/components/RecommendationsView';
 import { ItineraryView } from '@/app/components/ItineraryView';
 import { SavedItinerariesView } from '@/app/components/SavedItinerariesView';
@@ -12,10 +14,20 @@ import { Button } from '@/app/components/ui/button';
 import { MapPin, Sparkles, BookOpen } from 'lucide-react';
 import backgroundImage from '@/assets/bulusan-lake.jpg';
 
-type AppView = 'welcome' | 'preferences' | 'itinerary' | 'saved-itineraries' | 'edit-saved' | 'recommendations';
+type AppView =
+  | 'welcome'
+  | 'user-login'
+  | 'user-signup'
+  | 'preferences'
+  | 'itinerary'
+  | 'saved-itineraries'
+  | 'edit-saved'
+  | 'recommendations';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<AppView>('welcome');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [recommendations, setRecommendations] = useState<Destination[]>([]);
   const [itinerary, setItinerary] = useState<Destination[]>([]);
@@ -51,7 +63,8 @@ export default function App() {
     setPreferences(prefs);
     
     // Automatically generate a complete itinerary using hybrid algorithm with knapsack optimization
-    const recommended = getRecommendations(allDestinations, prefs, 10); // Get up to 10 destinations
+    const desiredLimit = Math.max(10, prefs.duration * 2);
+    const recommended = getRecommendations(allDestinations, prefs, desiredLimit);
     
     // Set the recommendations as the itinerary automatically
     setItinerary(recommended);
@@ -123,6 +136,14 @@ export default function App() {
     setViewingSavedItinerary(null);
   };
 
+  const handleStartPlanning = () => {
+    if (!isAuthenticated) {
+      setShowAuthPrompt(true);
+      return;
+    }
+    setCurrentView('preferences');
+  };
+
   return (
     <div className="min-h-screen relative overflow-hidden bg-slate-50">
       <div
@@ -147,10 +168,18 @@ export default function App() {
             </div>
             <div className="flex gap-2">
               {currentView === 'welcome' && (
-                <Button variant="outline" onClick={() => setCurrentView('saved-itineraries')}>
-                  <BookOpen className="w-4 h-4 mr-2" />
-                  View My Itineraries
-                </Button>
+                <>
+                  <Button className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => setCurrentView('user-signup')}>
+                    Sign Up
+                  </Button>
+                  <Button variant="outline" onClick={() => setCurrentView('user-login')}>
+                    Sign In
+                  </Button>
+                  <Button variant="outline" onClick={() => setCurrentView('saved-itineraries')}>
+                    <BookOpen className="w-4 h-4 mr-2" />
+                    View My Itineraries
+                  </Button>
+                </>
               )}
               {currentView === 'itinerary' && (
                 <Button variant="outline" onClick={() => setCurrentView('saved-itineraries')}>
@@ -162,6 +191,16 @@ export default function App() {
                 <Button variant="outline" onClick={() => setCurrentView('saved-itineraries')}>
                   <BookOpen className="w-4 h-4 mr-2" />
                   Back to My Itineraries
+                </Button>
+              )}
+              {currentView === 'user-login' && (
+                <Button variant="outline" onClick={() => setCurrentView('welcome')}>
+                  Back to Home
+                </Button>
+              )}
+              {currentView === 'user-signup' && (
+                <Button variant="outline" onClick={() => setCurrentView('welcome')}>
+                  Back to Home
                 </Button>
               )}
             </div>
@@ -197,8 +236,8 @@ export default function App() {
 
             {showHeroGrid ? (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
-                {heroDestinations.map((destination) => (
-                  <div key={destination.id} className="relative h-64 rounded-lg overflow-hidden shadow-lg">
+                {heroDestinations.map((destination, index) => (
+                  <div key={destination.id ?? `${destination.name}-${index}`} className="relative h-64 rounded-lg overflow-hidden shadow-lg">
                     <img
                       src={destination.image}
                       alt={destination.name}
@@ -254,10 +293,91 @@ export default function App() {
             <Button 
               size="lg" 
               className="text-lg px-8 py-6"
-              onClick={() => setCurrentView('preferences')}
+              onClick={handleStartPlanning}
             >
               Start Planning Your Trip!
             </Button>
+            <div className="flex flex-col items-center gap-3 text-sm text-slate-900">
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-1 shadow-sm ring-1 ring-slate-200 backdrop-blur">
+                <span className="font-medium">Already have an account?</span>
+                <button
+                  className="font-semibold text-slate-900 transition hover:text-slate-700"
+                  onClick={() => setCurrentView('user-login')}
+                >
+                  Log in here.
+                </button>
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-1 shadow-sm ring-1 ring-slate-200 backdrop-blur">
+                <span className="font-medium">New to Bulusan Wanderer?</span>
+                <button
+                  className="font-semibold text-slate-900 transition hover:text-slate-700"
+                  onClick={() => setCurrentView('user-signup')}
+                >
+                  Create your account.
+                </button>
+              </div>
+            </div>
+
+            {showAuthPrompt && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+                <div className="w-full max-w-md rounded-2xl bg-white p-6 text-left shadow-xl">
+                  <h3 className="text-lg font-semibold text-slate-900">Sign in required</h3>
+                  <p className="mt-2 text-sm text-slate-600">
+                    To start planning your trip, please sign in if you already have an account, or create a new one.
+                  </p>
+                  <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowAuthPrompt(false);
+                        setCurrentView('user-login');
+                      }}
+                    >
+                      Sign In
+                    </Button>
+                    <Button
+                      className="bg-emerald-700 text-white hover:bg-emerald-800"
+                      onClick={() => {
+                        setShowAuthPrompt(false);
+                        setCurrentView('user-signup');
+                      }}
+                    >
+                      Create Account
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => setShowAuthPrompt(false)}
+                    >
+                      Not now
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {currentView === 'user-login' && (
+          <div className="py-8">
+            <UserLogin
+              onLogin={() => {
+                setIsAuthenticated(true);
+                setCurrentView('preferences');
+              }}
+              onBack={() => setCurrentView('welcome')}
+            />
+          </div>
+        )}
+
+        {currentView === 'user-signup' && (
+          <div className="py-8">
+            <UserSignup
+              onSignup={() => {
+                setIsAuthenticated(true);
+                setCurrentView('preferences');
+              }}
+              onBack={() => setCurrentView('welcome')}
+            />
           </div>
         )}
 
