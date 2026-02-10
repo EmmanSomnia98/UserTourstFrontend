@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Destination, UserPreferences } from '@/app/types/destination';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { fetchDestinations } from '@/app/api/destinations';
+import { clearAuthSession, getAuthToken, getAuthUser } from '@/app/api/client';
+import { type AuthUser } from '@/app/api/auth';
 import { getRecommendations, calculateContentScore } from '@/app/utils/recommendation';
 import { PreferenceForm } from '@/app/components/PreferenceForm';
 import { UserLogin } from '@/app/components/UserLogin';
@@ -27,6 +29,7 @@ type AppView =
 export default function App() {
   const [currentView, setCurrentView] = useState<AppView>('welcome');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [recommendations, setRecommendations] = useState<Destination[]>([]);
@@ -37,6 +40,15 @@ export default function App() {
   const [viewingSavedItinerary, setViewingSavedItinerary] = useState<SavedItinerary | null>(null);
   const heroDestinations = allDestinations.slice(0, 3);
   const showHeroGrid = heroDestinations.length === 3;
+
+  useEffect(() => {
+    const storedToken = getAuthToken();
+    const storedUser = getAuthUser<AuthUser>();
+    if (storedToken || storedUser) {
+      setIsAuthenticated(true);
+      setCurrentUser(storedUser ?? null);
+    }
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -144,6 +156,17 @@ export default function App() {
     setCurrentView('preferences');
   };
 
+  const handleLogout = () => {
+    clearAuthSession();
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setPreferences(null);
+    setRecommendations([]);
+    setItinerary([]);
+    setViewingSavedItinerary(null);
+    setCurrentView('welcome');
+  };
+
   return (
     <div className="min-h-screen relative overflow-hidden bg-slate-50">
       <div
@@ -167,6 +190,16 @@ export default function App() {
               </div>
             </div>
             <div className="flex gap-2">
+              {isAuthenticated && (
+                <>
+                  <div className="hidden items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 sm:flex">
+                    {currentUser?.name || currentUser?.email || 'Signed in'}
+                  </div>
+                  <Button variant="outline" onClick={handleLogout}>
+                    Log out
+                  </Button>
+                </>
+              )}
               {currentView === 'welcome' && (
                 <>
                   <Button className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => setCurrentView('user-signup')}>
@@ -360,8 +393,9 @@ export default function App() {
         {currentView === 'user-login' && (
           <div className="py-8">
             <UserLogin
-              onLogin={() => {
+              onLogin={(session) => {
                 setIsAuthenticated(true);
+                setCurrentUser(session.user ?? null);
                 setCurrentView('preferences');
               }}
               onBack={() => setCurrentView('welcome')}
@@ -372,8 +406,9 @@ export default function App() {
         {currentView === 'user-signup' && (
           <div className="py-8">
             <UserSignup
-              onSignup={() => {
+              onSignup={(session) => {
                 setIsAuthenticated(true);
+                setCurrentUser(session.user ?? null);
                 setCurrentView('preferences');
               }}
               onBack={() => setCurrentView('welcome')}

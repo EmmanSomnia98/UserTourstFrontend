@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Calendar, MapPin, Trash2, Edit, Clock, DollarSign } from 'lucide-react';
 import { getSavedItineraries, deleteItinerary } from '@/app/utils/storage';
+import { fetchItineraries } from '@/app/api/itineraries';
 
 interface SavedItinerariesViewProps {
   onViewItinerary: (itinerary: SavedItinerary) => void;
@@ -12,9 +13,35 @@ interface SavedItinerariesViewProps {
 }
 
 export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: SavedItinerariesViewProps) {
-  const [savedItineraries, setSavedItineraries] = useState<SavedItinerary[]>(getSavedItineraries());
+  const [savedItineraries, setSavedItineraries] = useState<SavedItinerary[]>([]);
+  const [status, setStatus] = useState<'loading' | 'idle' | 'error'>('loading');
+  const [isRemote, setIsRemote] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    setStatus('loading');
+    fetchItineraries()
+      .then((data) => {
+        if (!isMounted) return;
+        setSavedItineraries(data);
+        setIsRemote(true);
+        setStatus('idle');
+      })
+      .catch((error) => {
+        console.error('Failed to load itineraries:', error);
+        if (!isMounted) return;
+        setSavedItineraries(getSavedItineraries());
+        setIsRemote(false);
+        setStatus('error');
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleDelete = (id: string) => {
+    if (isRemote) return;
     if (confirm('Are you sure you want to delete this itinerary?')) {
       deleteItinerary(id);
       setSavedItineraries(getSavedItineraries());
@@ -37,9 +64,11 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
         <div>
           <h2 className="text-3xl font-bold text-gray-900">My Saved Itineraries</h2>
           <p className="text-gray-600 mt-2">
-            {savedItineraries.length === 0 
-              ? 'No saved itineraries yet. Start planning your trip!' 
-              : `You have ${savedItineraries.length} saved ${savedItineraries.length === 1 ? 'itinerary' : 'itineraries'}`
+            {status === 'loading'
+              ? 'Loading your itineraries...'
+              : savedItineraries.length === 0 
+                ? 'No saved itineraries yet. Start planning your trip!' 
+                : `You have ${savedItineraries.length} saved ${savedItineraries.length === 1 ? 'itinerary' : 'itineraries'}`
             }
           </p>
         </div>
@@ -48,8 +77,14 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
         </Button>
       </div>
 
+      {status === 'error' && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          We couldn&apos;t load itineraries from the server. Showing local data instead.
+        </div>
+      )}
+
       {/* Empty State */}
-      {savedItineraries.length === 0 && (
+      {status !== 'loading' && savedItineraries.length === 0 && (
         <Card className="p-12 text-center">
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <MapPin className="w-8 h-8 text-gray-400" />
@@ -138,6 +173,8 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
                     variant="outline"
                     size="icon"
                     onClick={() => handleDelete(itinerary.id)}
+                    disabled={isRemote}
+                    title={isRemote ? 'Delete is not available for server itineraries yet.' : 'Delete itinerary'}
                   >
                     <Trash2 className="w-4 h-4 text-red-500" />
                   </Button>

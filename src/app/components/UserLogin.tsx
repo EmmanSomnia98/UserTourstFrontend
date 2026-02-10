@@ -1,14 +1,21 @@
+import { useState } from "react";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
+import { loginUser, type AuthUser } from "@/app/api/auth";
 import { ArrowRight, KeyRound, Mail } from "lucide-react";
 
 type UserLoginProps = {
-  onLogin: () => void;
+  onLogin: (session: { token?: string; user?: AuthUser }) => void;
   onBack: () => void;
 };
 
 export function UserLogin({ onLogin, onBack }: UserLoginProps) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   return (
     <div className="flex min-h-[70vh] items-center justify-center px-4">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-lg">
@@ -19,9 +26,18 @@ export function UserLogin({ onLogin, onBack }: UserLoginProps) {
 
         <form
           className="mt-8 space-y-5"
-          onSubmit={(event) => {
+          onSubmit={async (event) => {
             event.preventDefault();
-            onLogin();
+            setError(null);
+            setIsSubmitting(true);
+            try {
+              const session = await loginUser(email, password);
+              onLogin(session);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Login failed. Please try again.");
+            } finally {
+              setIsSubmitting(false);
+            }
           }}
         >
           <div className="space-y-2">
@@ -35,6 +51,8 @@ export function UserLogin({ onLogin, onBack }: UserLoginProps) {
                 autoComplete="email"
                 className="pl-9"
                 required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
               />
             </div>
           </div>
@@ -50,12 +68,20 @@ export function UserLogin({ onLogin, onBack }: UserLoginProps) {
                 autoComplete="current-password"
                 className="pl-9"
                 required
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
               />
             </div>
           </div>
 
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
           <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-            <Button type="submit" className="h-11 w-full gap-2 bg-emerald-700 text-white hover:bg-emerald-800">
+            <Button type="submit" className="h-11 w-full gap-2 bg-emerald-700 text-white hover:bg-emerald-800" disabled={isSubmitting}>
               Sign in
               <ArrowRight className="h-4 w-4" />
             </Button>
