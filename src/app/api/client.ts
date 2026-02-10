@@ -60,7 +60,7 @@ function buildHeaders(headers: HeadersInit = {}) {
 async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
-    credentials: options.credentials ?? 'include',
+    credentials: options.credentials ?? 'omit',
     headers: buildHeaders(options.headers),
   });
 
