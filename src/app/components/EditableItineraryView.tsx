@@ -85,7 +85,7 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
       {/* Header with editable name */}
       <Card className="p-6">
         <div className="space-y-4">
-          <div className="flex items-start justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex-1">
               {isEditingName ? (
                 <div className="flex items-center gap-2">
@@ -133,7 +133,7 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
                 {destinations.length} destinations • Editing mode
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {hasChanges && (
                 <Button onClick={handleSaveChanges}>
                   <Save className="w-4 h-4 mr-2" />
@@ -149,7 +149,7 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
 
           <Separator />
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="text-center p-4 bg-blue-50 rounded-lg">
               <Calendar className="w-6 h-6 mx-auto mb-2 text-blue-600" />
               <div className="text-2xl font-semibold">{tripDays}</div>
@@ -249,12 +249,12 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
                     <div className="absolute -left-8 top-4 w-4 h-4 bg-white border-2 border-blue-500 rounded-full"></div>
                     
                     <Card className="p-4 hover:shadow-md transition-shadow">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex gap-4 flex-1">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex gap-3 sm:gap-4 flex-1">
                           <img
                             src={dest.image}
                             alt={dest.name}
-                            className="w-24 h-24 object-cover rounded-lg flex-shrink-0"
+                            className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg flex-shrink-0"
                           />
                           <div className="flex-1 space-y-2">
                             <div>
@@ -271,7 +271,7 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
                               </Badge>
                             </div>
 
-                            <div className="flex items-center gap-4 text-sm text-gray-600">
+                            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
                               <div className="flex items-center gap-1">
                                 <Clock className="w-4 h-4" />
                                 <span>{getDuration(dest.duration)}h</span>
@@ -285,14 +285,16 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
                         </div>
                       </div>
 
-                      <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveDestination(dest.id)}
-                          className="flex-shrink-0"
-                        >
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                        </Button>
+                        <div className="flex justify-end sm:block">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveDestination(dest.id)}
+                            className="flex-shrink-0"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        </div>
                       </div>
                     </Card>
                   </div>
@@ -309,7 +311,7 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
 
       {/* Actions */}
       <Card className="p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h4 className="font-semibold">Done editing?</h4>
             <p className="text-sm text-gray-600 mt-1">

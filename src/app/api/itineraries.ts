@@ -4,6 +4,9 @@ import { Destination } from '@/app/types/destination';
 
 type BackendItineraryDestination = {
   destination?: Destination & {
+    durationHours?: number | string;
+    estimatedDuration?: number | string;
+    estimated_duration?: number | string;
     lat?: number | string;
     lng?: number | string;
     latitude?: number | string;
@@ -41,7 +44,15 @@ function toDestinationList(items: BackendItineraryDestination[] | undefined): De
   if (!items?.length) return [];
   return items
     .map((item) => item.destination)
-    .map((destination) => (destination ? ({ ...destination, location: normalizeLocation(destination) } as Destination) : destination))
+    .map((destination) =>
+      destination
+        ? ({
+            ...destination,
+            duration: normalizeDuration(destination),
+            location: normalizeLocation(destination),
+          } as Destination)
+        : destination
+    )
     .filter((dest): dest is Destination => Boolean(dest));
 }
 
@@ -73,6 +84,33 @@ function normalizeLocation(destination: BackendItineraryDestination['destination
   }
 
   return { lat: Number.NaN, lng: Number.NaN };
+}
+
+function parseNumberish(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const direct = Number(trimmed);
+  if (Number.isFinite(direct)) return direct;
+  const match = trimmed.match(/(\d+(\.\d+)?)/);
+  if (!match) return null;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeDuration(destination: BackendItineraryDestination['destination']): number {
+  const candidates = [
+    destination?.duration,
+    destination?.durationHours,
+    destination?.estimatedDuration,
+    destination?.estimated_duration,
+  ];
+  for (const candidate of candidates) {
+    const parsed = parseNumberish(candidate);
+    if (parsed !== null && parsed > 0) return parsed;
+  }
+  return 0;
 }
 
 function deriveTripDays(totalDuration: number): number {

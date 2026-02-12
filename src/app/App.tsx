@@ -179,17 +179,17 @@ export default function App() {
       {/* Header */}
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
                 <MapPin className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Bulusan Wanderer</h1>
+                <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">Bulusan Wanderer</h1>
                 <p className="text-sm text-gray-600">Personalized Itinerary Planner</p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               {isAuthenticated && (
                 <>
                   <div className="hidden items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 sm:flex">
@@ -254,10 +254,10 @@ export default function App() {
                 <Sparkles className="w-5 h-5" />
                 <span className="font-medium">AI-Powered Recommendations</span>
               </div>
-              <h2 className="text-5xl font-bold text-gray-900">
+              <h2 className="text-3xl font-bold text-gray-900 sm:text-5xl">
                 Discover Bulusan, Sorsogon
               </h2>
-              <p className="text-xl text-black-600 font-medium max-w-3xl mx-auto">
+              <p className="text-base text-black-600 font-medium max-w-3xl mx-auto sm:text-xl">
                 Let our hybrid recommendation system create a personalized travel itinerary 
                 based on your preferences, interests, and travel style. Experience the best of 
                 Bulusan's natural wonders, cultural heritage, and adventure destinations.

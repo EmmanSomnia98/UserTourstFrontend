@@ -51,7 +51,7 @@ export function RecommendationsView({
       {/* Itinerary Status */}
       {itinerary.length > 0 && (
         <Card className="p-6 bg-gradient-to-r from-blue-50 to-purple-50">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center font-semibold">
                 {itinerary.length}
@@ -73,7 +73,7 @@ export function RecommendationsView({
 
       {/* Top Recommendations */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h3 className="text-xl font-semibold">Top Picks for You</h3>
           <Button variant="outline" onClick={onRestart}>
             <RefreshCw className="w-4 h-4 mr-2" />

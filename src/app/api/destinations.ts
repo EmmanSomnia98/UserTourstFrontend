@@ -9,6 +9,9 @@ type DestinationPayload =
 type RawDestination = Partial<Destination> & {
   _id?: string;
   destinationId?: string;
+  durationHours?: number | string;
+  estimatedDuration?: number | string;
+  estimated_duration?: number | string;
   lat?: number | string;
   lng?: number | string;
   latitude?: number | string;
@@ -40,6 +43,7 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
     return {
       ...item,
       id: String(item.id ?? item._id ?? item.destinationId ?? fallbackId),
+      duration: normalizeDuration(item),
       location: normalizeLocation(item),
     } as Destination;
   });
@@ -76,6 +80,30 @@ function normalizeLocation(item: RawDestination): Destination['location'] {
 
   // Keep a safe fallback object to avoid undefined access in UI.
   return { lat: Number.NaN, lng: Number.NaN };
+}
+
+function parseNumberish(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const direct = Number(trimmed);
+  if (Number.isFinite(direct)) return direct;
+  const match = trimmed.match(/(\d+(\.\d+)?)/);
+  if (!match) return null;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeDuration(item: RawDestination): number {
+  const candidates = [item.duration, item.durationHours, item.estimatedDuration, item.estimated_duration];
+  for (const candidate of candidates) {
+    const parsed = parseNumberish(candidate);
+    if (parsed !== null && parsed > 0) return parsed;
+  }
+  return 0;
 }
 
 export async function fetchDestinations(): Promise<Destination[]> {
