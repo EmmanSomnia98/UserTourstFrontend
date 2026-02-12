@@ -14,6 +14,14 @@ import { ItineraryView } from '@/app/components/ItineraryView';
 import { SavedItinerariesView } from '@/app/components/SavedItinerariesView';
 import { EditableItineraryView } from '@/app/components/EditableItineraryView';
 import { Button } from '@/app/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/app/components/ui/dialog';
 import { MapPin, Sparkles, BookOpen, Menu } from 'lucide-react';
 import backgroundImage from '@/assets/bulusan-lake.jpg';
 
@@ -41,6 +49,8 @@ export default function App() {
   const [recommendationScores, setRecommendationScores] = useState<Map<string, number>>(new Map());
   const [viewingSavedItinerary, setViewingSavedItinerary] = useState<SavedItinerary | null>(null);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
+  const [logoutStep, setLogoutStep] = useState<'confirm' | 'thanks'>('confirm');
   const heroDestinations = allDestinations.slice(0, 3);
   const showHeroGrid = heroDestinations.length === 3;
 
@@ -159,7 +169,12 @@ export default function App() {
     setCurrentView('preferences');
   };
 
-  const handleLogout = () => {
+  const handleLogoutAttempt = () => {
+    setLogoutStep('confirm');
+    setIsLogoutDialogOpen(true);
+  };
+
+  const handleLogoutConfirmed = () => {
     clearAuthSession();
     setIsAuthenticated(false);
     setCurrentUser(null);
@@ -167,8 +182,14 @@ export default function App() {
     setRecommendations([]);
     setItinerary([]);
     setViewingSavedItinerary(null);
-    setCurrentView('welcome');
     setIsMobileNavOpen(false);
+    setLogoutStep('thanks');
+    setCurrentView('welcome');
+  };
+
+  const handleLogoutThanksClose = () => {
+    setIsLogoutDialogOpen(false);
+    setLogoutStep('confirm');
   };
 
   const desktopActionButtonClass = 'h-9 px-3';
@@ -189,7 +210,7 @@ export default function App() {
           <Button
             variant="outline"
             className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
-            onClick={handleLogout}
+            onClick={handleLogoutAttempt}
           >
             Log out
           </Button>
@@ -229,6 +250,8 @@ export default function App() {
           <Button
             variant="outline"
             className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
+            disabled={!isAuthenticated}
+            title={!isAuthenticated ? 'Sign in or sign up to view your itineraries.' : undefined}
             onClick={() => {
               if (mobile) {
                 handleMobileNavigate('saved-itineraries');
@@ -246,6 +269,8 @@ export default function App() {
         <Button
           variant="outline"
           className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
+          disabled={!isAuthenticated}
+          title={!isAuthenticated ? 'Sign in or sign up to view your itineraries.' : undefined}
           onClick={() => {
             if (mobile) {
               handleMobileNavigate('saved-itineraries');
@@ -262,6 +287,8 @@ export default function App() {
         <Button
           variant="outline"
           className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
+          disabled={!isAuthenticated}
+          title={!isAuthenticated ? 'Sign in or sign up to view your itineraries.' : undefined}
           onClick={() => {
             if (mobile) {
               handleMobileNavigate('saved-itineraries');
@@ -369,6 +396,50 @@ export default function App() {
           </aside>
         </div>
       )}
+
+      <Dialog
+        open={isLogoutDialogOpen}
+        onOpenChange={(nextOpen) => {
+          if (logoutStep === 'confirm') {
+            setIsLogoutDialogOpen(nextOpen);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          {logoutStep === 'confirm' ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Log out</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to log out?
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsLogoutDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleLogoutConfirmed}>
+                  Yes, log out
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Thank you!</DialogTitle>
+                <DialogDescription>
+                  We hope you had a great experience planning your trip with Bulusan Wanderer. See you again soon!
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button onClick={handleLogoutThanksClose}>
+                  OK
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -525,7 +596,7 @@ export default function App() {
               onLogin={(session) => {
                 setIsAuthenticated(true);
                 setCurrentUser(session.user ?? null);
-                setCurrentView('preferences');
+                setCurrentView('welcome');
               }}
               onBack={() => setCurrentView('welcome')}
             />
@@ -538,7 +609,7 @@ export default function App() {
               onSignup={(session) => {
                 setIsAuthenticated(true);
                 setCurrentUser(session.user ?? null);
-                setCurrentView('preferences');
+                setCurrentView('welcome');
               }}
               onBack={() => setCurrentView('welcome')}
             />
