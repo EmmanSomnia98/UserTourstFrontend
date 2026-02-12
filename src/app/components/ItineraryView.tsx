@@ -4,6 +4,15 @@ import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Separator } from '@/app/components/ui/separator';
+import { Input } from '@/app/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/app/components/ui/dialog';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { Calendar, Clock, MapPin, Trash2, Download, Share2, Save, Plus } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
@@ -32,6 +41,9 @@ export function ItineraryView({
 }: ItineraryViewProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [saveNameDraft, setSaveNameDraft] = useState('');
+  const [saveError, setSaveError] = useState<string | null>(null);
   const getDuration = (value: number) => (Number.isFinite(value) ? value : 0);
   const schedule = calculateItinerarySchedule(destinations, tripDays);
   const emptyDays = Array.from(schedule.entries()).filter(([, dayDestinations]) => dayDestinations.length === 0).length;
@@ -39,39 +51,50 @@ export function ItineraryView({
   const totalCost = destinations.reduce((sum, dest) => sum + dest.estimatedCost, 0);
   const totalDuration = destinations.reduce((sum, dest) => sum + getDuration(dest.duration), 0);
 
+  const openSaveDialog = () => {
+    const defaultName = `Bulusan Trip ${new Date().toLocaleDateString()}`;
+    setSaveNameDraft(defaultName);
+    setSaveError(null);
+    setIsSaveDialogOpen(true);
+  };
+
   const handleSave = async () => {
-    const itineraryName = prompt('Give your itinerary a name:', `Bulusan Trip ${new Date().toLocaleDateString()}`);
-    
-    if (itineraryName) {
-      setIsSaving(true);
+    const itineraryName = saveNameDraft.trim();
+    if (!itineraryName) {
+      setSaveError('Please enter an itinerary name.');
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const newItinerary: SavedItinerary = {
+        id: `itinerary_${Date.now()}`,
+        name: itineraryName,
+        destinations,
+        tripDays,
+        createdAt: new Date().toISOString(),
+        totalCost,
+        totalDuration
+      };
+      
+      saveItinerary(newItinerary);
+
+      // Best-effort sync to backend for admin visibility.
       try {
-        const newItinerary: SavedItinerary = {
-          id: `itinerary_${Date.now()}`,
-          name: itineraryName,
-          destinations,
-          tripDays,
-          createdAt: new Date().toISOString(),
-          totalCost,
-          totalDuration
-        };
-        
-        saveItinerary(newItinerary);
-
-        // Best-effort sync to backend for admin visibility.
-        try {
-          await createItinerary(newItinerary);
-        } catch (syncError) {
-          console.warn('Failed to sync itinerary to server:', syncError);
-        }
-
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
-        onSaveSuccess?.();
-      } catch (error) {
-        alert('Failed to save itinerary. Please try again.');
-      } finally {
-        setIsSaving(false);
+        await createItinerary(newItinerary);
+      } catch (syncError) {
+        console.warn('Failed to sync itinerary to server:', syncError);
       }
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+      setIsSaveDialogOpen(false);
+      onSaveSuccess?.();
+    } catch (error) {
+      setSaveError('Failed to save itinerary. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -250,7 +273,7 @@ export function ItineraryView({
           <div className="flex gap-2">
             <Button
               variant="outline"
-              onClick={handleSave}
+              onClick={openSaveDialog}
               disabled={isSaving}
               className={isSaving ? 'cursor-not-allowed' : ''}
             >
@@ -267,6 +290,56 @@ export function ItineraryView({
           </div>
         )}
       </Card>
+
+      <Dialog
+        open={isSaveDialogOpen}
+        onOpenChange={(nextOpen) => {
+          if (!isSaving) {
+            setIsSaveDialogOpen(nextOpen);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md p-5">
+          <DialogHeader>
+            <DialogTitle>Save Itinerary</DialogTitle>
+            <DialogDescription>
+              Enter a name for this itinerary.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Input
+              value={saveNameDraft}
+              onChange={(e) => setSaveNameDraft(e.target.value)}
+              placeholder="Itinerary name"
+              className="h-10 text-sm"
+              autoFocus
+              disabled={isSaving}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void handleSave();
+                }
+              }}
+            />
+            {saveError && (
+              <p className="text-sm text-red-600">{saveError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsSaveDialogOpen(false)}
+              size="sm"
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+            <Button onClick={() => void handleSave()} size="sm" disabled={isSaving}>
+              {isSaving ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
