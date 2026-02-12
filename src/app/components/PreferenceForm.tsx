@@ -119,7 +119,7 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
   const [expandedInterests, setExpandedInterests] = useState<string[]>([]);
   const [activityLevel, setActivityLevel] = useState<'relaxed' | 'moderate' | 'active'>('moderate');
   const [budget, setBudget] = useState<string>('1000');
-  const [duration, setDuration] = useState<string>('3');
+  const [duration, setDuration] = useState<string>('');
   const [travelStyle, setTravelStyle] = useState<string[]>(['solo']);
   const [collaborators, setCollaborators] = useState<string[]>([]);
   const [showInterestError, setShowInterestError] = useState(false);
@@ -217,7 +217,12 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
     const budgetNum = planningMode === 'budget'
       ? (parseInt(budget) || 1000)
       : preferenceBudgetFallback;
-    const durationNum = parseInt(duration) || 3;
+    const durationNum = parseInt(duration, 10);
+    if (!Number.isFinite(durationNum) || durationNum < 1 || durationNum > 30) {
+      setSubmitError('Please enter a trip duration between 1 and 30 days.');
+      setIsSubmitting(false);
+      return;
+    }
     
     try {
       onSubmit({

@@ -43,9 +43,9 @@ export function knapsackOptimization(
   // Fill the DP table
   for (let i = 0; i < n; i++) {
     const item = items[i];
-    const cost = Math.floor(item.weight);
-    const duration = Math.floor(item.durationWeight ?? item.destination.duration);
-    const value = item.value;
+    const { weight, durationWeight, destination, value } = item;
+    const cost = Math.floor(weight);
+    const duration = Math.floor(durationWeight ?? destination.duration);
     
     // Traverse in reverse to avoid using same item multiple times
     for (let w = W; w >= cost; w--) {
@@ -219,14 +219,12 @@ function enhanceDiversity(
           const valueDiff = item.value - (allItems.find(it => it.destination.id === toReplace.id)?.value || 0);
           if (valueDiff >= -item.value * diversityWeight) {
             const idx = result.findIndex(d => d.id === toReplace.id);
-            if (idx !== -1) {
-              // Ensure we're not adding a duplicate
-              if (!result.some(d => d.id === item.destination.id)) {
-                result[idx] = item.destination;
-                totalCost = newCost;
-                totalDuration = newDuration;
-                break;
-              }
+            // Ensure we're not adding a duplicate
+            if (idx !== -1 && !result.some(d => d.id === item.destination.id)) {
+              result[idx] = item.destination;
+              totalCost = newCost;
+              totalDuration = newDuration;
+              break;
             }
           }
         }
@@ -235,9 +233,7 @@ function enhanceDiversity(
   }
   
   // Final deduplication check
-  const uniqueResult = Array.from(
+  return Array.from(
     new Map(result.map(d => [d.id, d])).values()
   );
-  
-  return uniqueResult;
 }

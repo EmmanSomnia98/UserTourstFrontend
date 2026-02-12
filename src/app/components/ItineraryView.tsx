@@ -9,6 +9,7 @@ import { Calendar, Clock, MapPin, Trash2, Download, Share2, Save, Plus } from 'l
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { saveItinerary } from '@/app/utils/storage';
+import { createItinerary } from '@/app/api/itineraries';
 
 interface ItineraryViewProps {
   destinations: Destination[];
@@ -38,7 +39,7 @@ export function ItineraryView({
   const totalCost = destinations.reduce((sum, dest) => sum + dest.estimatedCost, 0);
   const totalDuration = destinations.reduce((sum, dest) => sum + getDuration(dest.duration), 0);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const itineraryName = prompt('Give your itinerary a name:', `Bulusan Trip ${new Date().toLocaleDateString()}`);
     
     if (itineraryName) {
@@ -55,6 +56,14 @@ export function ItineraryView({
         };
         
         saveItinerary(newItinerary);
+
+        // Best-effort sync to backend for admin visibility.
+        try {
+          await createItinerary(newItinerary);
+        } catch (syncError) {
+          console.warn('Failed to sync itinerary to server:', syncError);
+        }
+
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
         onSaveSuccess?.();

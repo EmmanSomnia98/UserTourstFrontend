@@ -22,17 +22,32 @@ type ModeState = {
 };
 
 const cache = new Map<string, TravelEstimate>();
+const inFlight = new Map<string, Promise<TravelEstimate>>();
+const failedAt = new Map<string, number>();
+const FAILURE_RETRY_MS = 5 * 60 * 1000;
+const GLOBAL_DISABLE_MS = 2 * 60 * 1000;
+let orsDisabledUntil = 0;
+
+function isValidCoordinate(value: number, min: number, max: number): boolean {
+  return Number.isFinite(value) && value >= min && value <= max;
+}
+
+function hasValidLocation(destination: Destination): boolean {
+  const lat = destination.location?.lat;
+  const lng = destination.location?.lng;
+  return isValidCoordinate(lat, -90, 90) && isValidCoordinate(lng, -180, 180);
+}
+
+function isOrsUnavailable(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return message.includes('ORS error: 5');
+}
 
 export function TravelModeBadges({ destination }: TravelModeBadgesProps) {
-  if (!destination.location) {
-    return (
-      <div className="text-xs text-slate-500">
-        Distance unavailable
-      </div>
-    );
-  }
+  const canUseOrs = import.meta.env.VITE_ENABLE_ORS === 'true' && Boolean(import.meta.env.VITE_ORS_API_KEY);
+  const hasLocation = hasValidLocation(destination);
 
-  const distanceKmFallback = haversineKm(DEFAULT_ORIGIN, destination.location);
+  const distanceKmFallback = hasLocation ? haversineKm(DEFAULT_ORIGIN, destination.location) : 0;
   const distanceLabelFallback = formatDistanceKm(distanceKmFallback);
   const fallback = useMemo(
     () => ({
@@ -51,6 +66,11 @@ export function TravelModeBadges({ destination }: TravelModeBadgesProps) {
     profile: TravelProfile,
     setter: (state: ModeState) => void
   ) => {
+    if (!canUseOrs || !hasLocation || Date.now() < orsDisabledUntil) {
+      setter({ loading: false });
+      return;
+    }
+
     const key = `${destination.id ?? destination.name}-${profile}`;
     const cached = cache.get(key);
     if (cached) {
@@ -58,16 +78,48 @@ export function TravelModeBadges({ destination }: TravelModeBadgesProps) {
       return;
     }
 
+    const lastFailure = failedAt.get(key);
+    if (lastFailure && Date.now() - lastFailure < FAILURE_RETRY_MS) {
+      setter({ loading: false });
+      return;
+    }
+
+    const pending = inFlight.get(key);
+    if (pending) {
+      try {
+        const estimate = await pending;
+        setter({ loading: false, estimate });
+      } catch (error) {
+        setter({ loading: false, error: (error as Error).message });
+      }
+      return;
+    }
+
+    const request = fetchOrsEstimate(DEFAULT_ORIGIN, destination.location, profile);
+    inFlight.set(key, request);
     try {
-      const estimate = await fetchOrsEstimate(DEFAULT_ORIGIN, destination.location, profile);
+      const estimate = await request;
       cache.set(key, estimate);
       setter({ loading: false, estimate });
     } catch (error) {
+      failedAt.set(key, Date.now());
+      if (isOrsUnavailable(error)) {
+        orsDisabledUntil = Date.now() + GLOBAL_DISABLE_MS;
+      }
       setter({ loading: false, error: (error as Error).message });
+    } finally {
+      inFlight.delete(key);
     }
   };
 
   useEffect(() => {
+    if (!hasLocation) {
+      setWalk({ loading: false, error: 'Distance unavailable' });
+      setBike({ loading: false, error: 'Distance unavailable' });
+      setDrive({ loading: false, error: 'Distance unavailable' });
+      return;
+    }
+
     setWalk({ loading: true });
     setBike({ loading: true });
     setDrive({ loading: true });
@@ -75,7 +127,7 @@ export function TravelModeBadges({ destination }: TravelModeBadgesProps) {
     void loadEstimate('foot-walking', setWalk);
     void loadEstimate('cycling-regular', setBike);
     void loadEstimate('driving-car', setDrive);
-  }, [destination.id, destination.name, destination.location?.lat, destination.location?.lng]);
+  }, [destination.id, destination.name, destination.location?.lat, destination.location?.lng, canUseOrs, hasLocation]);
 
   const renderBadge = (
     icon: React.ReactNode,
@@ -95,6 +147,10 @@ export function TravelModeBadges({ destination }: TravelModeBadgesProps) {
       </div>
     );
   };
+
+  if (!hasLocation) {
+    return <div className="text-xs text-slate-500">Distance unavailable</div>;
+  }
 
   return (
     <div className="flex flex-wrap gap-2 text-xs text-slate-700">

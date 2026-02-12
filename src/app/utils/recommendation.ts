@@ -219,6 +219,7 @@ export function calculateItinerarySchedule(
 ): Map<number, Destination[]> {
   const schedule = new Map<number, Destination[]>();
   const totalDays = Math.max(1, Math.floor(tripDays));
+  const maxHoursPerDay = 8;
 
   for (let day = 1; day <= totalDays; day++) {
     schedule.set(day, []);
@@ -247,28 +248,51 @@ export function calculateItinerarySchedule(
     return getDuration(b) - getDuration(a);
   });
   
-  let currentDay = 1;
-  let currentDayHours = 0;
-  const maxHoursPerDay = 8;
-  const minHoursPerDay = 3; // Minimum to make a day worthwhile
-  
-  sorted.forEach(dest => {
-    if (currentDay > totalDays) return;
-    const duration = getDuration(dest);
-    
-    // Check if adding this destination would exceed daily limit
-    if (currentDayHours + duration > maxHoursPerDay && currentDayHours >= minHoursPerDay) {
-      currentDay++;
-      currentDayHours = 0;
+  const dayHours = Array.from({ length: totalDays }, () => 0);
+  const seedDays = Math.min(totalDays, sorted.length);
+
+  // First pass: ensure we spread one activity per day when possible.
+  for (let i = 0; i < seedDays; i++) {
+    const day = i + 1;
+    const destination = sorted[i];
+    const duration = getDuration(destination);
+    const dayDestinations = schedule.get(day) || [];
+    dayDestinations.push(destination);
+    schedule.set(day, dayDestinations);
+    dayHours[i] += duration;
+  }
+
+  // Second pass: place remaining activities on the lightest suitable day.
+  for (let i = seedDays; i < sorted.length; i++) {
+    const destination = sorted[i];
+    const duration = getDuration(destination);
+
+    let bestDayIndex = 0;
+    let bestDayHours = Number.POSITIVE_INFINITY;
+
+    for (let dayIndex = 0; dayIndex < totalDays; dayIndex++) {
+      const projectedHours = dayHours[dayIndex] + duration;
+      const isWithinLimit = projectedHours <= maxHoursPerDay;
+      if (isWithinLimit && dayHours[dayIndex] < bestDayHours) {
+        bestDayIndex = dayIndex;
+        bestDayHours = dayHours[dayIndex];
+      }
     }
-    
-    if (currentDay <= totalDays) {
-      const dayDestinations = schedule.get(currentDay) || [];
-      dayDestinations.push(dest);
-      schedule.set(currentDay, dayDestinations);
-      currentDayHours += duration;
+
+    if (bestDayHours === Number.POSITIVE_INFINITY) {
+      for (let dayIndex = 0; dayIndex < totalDays; dayIndex++) {
+        if (dayHours[dayIndex] < dayHours[bestDayIndex]) {
+          bestDayIndex = dayIndex;
+        }
+      }
     }
-  });
+
+    const day = bestDayIndex + 1;
+    const dayDestinations = schedule.get(day) || [];
+    dayDestinations.push(destination);
+    schedule.set(day, dayDestinations);
+    dayHours[bestDayIndex] += duration;
+  }
   
   return schedule;
 }

@@ -23,6 +23,12 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
     fetchItineraries()
       .then((data) => {
         if (!isMounted) return;
+        if (data.length === 0) {
+          setSavedItineraries(getSavedItineraries());
+          setIsRemote(false);
+          setStatus('idle');
+          return;
+        }
         setSavedItineraries(data);
         setIsRemote(true);
         setStatus('idle');

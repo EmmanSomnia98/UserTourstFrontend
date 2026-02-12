@@ -202,12 +202,16 @@ export default function App() {
               )}
               {currentView === 'welcome' && (
                 <>
-                  <Button className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => setCurrentView('user-signup')}>
-                    Sign Up
-                  </Button>
-                  <Button variant="outline" onClick={() => setCurrentView('user-login')}>
-                    Sign In
-                  </Button>
+                  {!isAuthenticated && (
+                    <>
+                      <Button className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => setCurrentView('user-signup')}>
+                        Sign Up
+                      </Button>
+                      <Button variant="outline" onClick={() => setCurrentView('user-login')}>
+                        Sign In
+                      </Button>
+                    </>
+                  )}
                   <Button variant="outline" onClick={() => setCurrentView('saved-itineraries')}>
                     <BookOpen className="w-4 h-4 mr-2" />
                     View My Itineraries
