@@ -23,7 +23,7 @@ export function UserSignup({ onSignup, onBack }: UserSignupProps) {
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-lg">
         <div className="space-y-2 text-center">
           <h2 className="text-2xl font-semibold text-slate-900">User Sign Up</h2>
-          <p className="text-sm text-slate-500">Travel Itinerary Management System</p>
+          <p className="text-sm text-slate-500">Welcome to Bulusan Wanderer!</p>
         </div>
 
         <form
