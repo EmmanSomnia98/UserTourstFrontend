@@ -1,5 +1,6 @@
 import { Destination, UserPreferences } from '@/app/types/destination';
 import { getRecommendationScores } from '@/app/utils/recommendation';
+import { formatPeso } from '@/app/utils/currency';
 import { Card } from '@/app/components/ui/card';
 import { Progress } from '@/app/components/ui/progress';
 import { Badge } from '@/app/components/ui/badge';
@@ -176,7 +177,7 @@ export function RecommendationBreakdown({
             <p className="font-medium text-blue-900 mb-1">Knapsack Optimization Applied</p>
             <p>
               This recommendation was optimized using a multi-constraint knapsack algorithm 
-              to maximize value while respecting your budget (₱{preferences.budget}) and 
+              to maximize value while respecting your budget ({formatPeso(preferences.budget)}) and 
               time constraints ({preferences.duration} days).
             </p>
           </div>

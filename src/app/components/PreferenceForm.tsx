@@ -240,10 +240,10 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
   };
 
   return (
-    <Card className="p-8 max-w-4xl mx-auto">
-      <form onSubmit={handleSubmit} className="space-y-8">
+    <Card className="p-4 sm:p-8 max-w-4xl mx-auto">
+      <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
         <div>
-          <h2 className="text-2xl mb-2">Tell us about your travel preferences</h2>
+          <h2 className="text-xl sm:text-2xl mb-2">Tell us about your travel preferences</h2>
           <p className="text-gray-600">We'll create personalized itineraries just for you</p>
         </div>
 
@@ -285,7 +285,7 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
         {/* Travel Style */}
         <div className="space-y-4">
           <Label className="text-lg">Travel Style</Label>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             {['solo', 'couple', 'family_group'].map(style => {
               const isSelected = selectedTravelStyle === style;
               const label = style === 'family_group' ? 'family/group' : style;

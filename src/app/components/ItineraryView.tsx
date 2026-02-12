@@ -14,11 +14,12 @@ import {
   DialogTitle,
 } from '@/app/components/ui/dialog';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
-import { Calendar, Clock, MapPin, Trash2, Download, Share2, Save, Plus } from 'lucide-react';
+import { Calendar, Clock, MapPin, Trash2, Download, Share2, Save, Plus, Wallet } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { saveItinerary } from '@/app/utils/storage';
 import { createItinerary } from '@/app/api/itineraries';
+import { formatPeso } from '@/app/utils/currency';
 
 interface ItineraryViewProps {
   destinations: Destination[];
@@ -102,13 +103,13 @@ export function ItineraryView({
     // Create a simple text version of the itinerary
     let itineraryText = `Bulusan Travel Itinerary\n\n`;
     itineraryText += `Total Duration: ${tripDays} days\n`;
-    itineraryText += `Total Cost: ₱${totalCost}\n`;
+    itineraryText += `Total Cost: ${formatPeso(totalCost)}\n`;
     itineraryText += `Total Activity Hours: ${totalDuration}h\n\n`;
     
     schedule.forEach((dayDestinations, day) => {
       itineraryText += `Day ${day}:\n`;
       dayDestinations.forEach(dest => {
-        itineraryText += `  - ${dest.name} (${dest.duration}h, ₱${dest.estimatedCost})\n`;
+        itineraryText += `  - ${dest.name} (${dest.duration}h, ${formatPeso(dest.estimatedCost)})\n`;
       });
       itineraryText += `\n`;
     });
@@ -173,8 +174,8 @@ export function ItineraryView({
               <div className="text-sm text-gray-600">Total Time</div>
             </div>
             <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <MapPin className="w-6 h-6 mx-auto mb-2 text-purple-600" />
-              <div className="text-2xl font-semibold">₱{totalCost}</div>
+              <Wallet className="w-6 h-6 mx-auto mb-2 text-purple-600" />
+              <div className="text-2xl font-semibold">{formatPeso(totalCost)}</div>
               <div className="text-sm text-gray-600">Est. Cost</div>
             </div>
           </div>
@@ -197,7 +198,7 @@ export function ItineraryView({
               </div>
             </div>
 
-            <div className="space-y-3 ml-6 border-l-2 border-gray-200 pl-6">
+            <div className="space-y-3 sm:ml-6 sm:border-l-2 sm:border-gray-200 sm:pl-6">
               {dayDestinations.length === 0 && (
                 <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
                   No activities scheduled for this day yet.
@@ -205,15 +206,15 @@ export function ItineraryView({
               )}
               {dayDestinations.map((dest, index) => (
                 <div key={dest.id ?? `${dest.name}-${day}-${index}`} className="relative">
-                  <div className="absolute -left-8 top-4 w-4 h-4 bg-white border-2 border-blue-500 rounded-full"></div>
+                  <div className="hidden sm:block absolute -left-8 top-4 w-4 h-4 bg-white border-2 border-blue-500 rounded-full"></div>
                   
                   <Card className="p-4 hover:shadow-md transition-shadow">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="flex gap-3 sm:gap-4 flex-1">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:gap-4 flex-1">
                         <img
                           src={dest.image}
                           alt={dest.name}
-                          className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg flex-shrink-0"
+                          className="w-full h-32 sm:w-24 sm:h-24 object-cover rounded-lg flex-shrink-0"
                         />
                         <div className="flex-1 space-y-2">
                           <div>
@@ -230,21 +231,23 @@ export function ItineraryView({
                             </Badge>
                           </div>
 
-                          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+                          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 pt-1">
                             <div className="flex items-center gap-1">
                               <Clock className="w-4 h-4" />
                               <span>{getDuration(dest.duration)}h</span>
                             </div>
                             <div className="flex items-center gap-1">
                               <MapPin className="w-4 h-4" />
-                              <span>₱{dest.estimatedCost}</span>
+                              <span>{formatPeso(dest.estimatedCost)}</span>
                             </div>
                           </div>
-                          <TravelModeBadges destination={dest} />
+                          <div className="pt-1">
+                            <TravelModeBadges destination={dest} />
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex justify-end sm:block">
+                      <div className="flex justify-end sm:block pt-1 sm:pt-0">
                         <Button
                           variant="ghost"
                           size="sm"

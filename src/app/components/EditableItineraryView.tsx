@@ -6,9 +6,10 @@ import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Separator } from '@/app/components/ui/separator';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
-import { Calendar, Clock, MapPin, Trash2, Plus, Save, X, Edit2 } from 'lucide-react';
+import { Calendar, Clock, MapPin, Trash2, Plus, Save, X, Edit2, Wallet } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { updateItineraryName, deleteItinerary, saveItinerary } from '@/app/utils/storage';
+import { formatPeso } from '@/app/utils/currency';
 
 interface EditableItineraryViewProps {
   savedItinerary: SavedItinerary;
@@ -161,8 +162,8 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
               <div className="text-sm text-gray-600">Total Time</div>
             </div>
             <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <MapPin className="w-6 h-6 mx-auto mb-2 text-purple-600" />
-              <div className="text-2xl font-semibold">₱{totalCost}</div>
+              <Wallet className="w-6 h-6 mx-auto mb-2 text-purple-600" />
+              <div className="text-2xl font-semibold">{formatPeso(totalCost)}</div>
               <div className="text-sm text-gray-600">Est. Cost</div>
             </div>
           </div>
@@ -199,7 +200,7 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
                       <Clock className="w-3 h-3" />
                       <span>{dest.duration}h</span>
                       <MapPin className="w-3 h-3 ml-2" />
-                      <span>₱{dest.estimatedCost}</span>
+                      <span>{formatPeso(dest.estimatedCost)}</span>
                     </div>
                   </div>
                   <Button
@@ -278,7 +279,7 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
                               </div>
                               <div className="flex items-center gap-1">
                                 <MapPin className="w-4 h-4" />
-                                <span>₱{dest.estimatedCost}</span>
+                                <span>{formatPeso(dest.estimatedCost)}</span>
                               </div>
                             </div>
                           <TravelModeBadges destination={dest} />

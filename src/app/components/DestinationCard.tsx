@@ -3,6 +3,7 @@ import { Card } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
+import { formatPeso } from '@/app/utils/currency';
 import { Star, Clock, TrendingUp, MapPin, Plus, Check, Info } from 'lucide-react';
 
 interface DestinationCardProps {
@@ -38,7 +39,7 @@ export function DestinationCard({
 
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow">
-      <div className="relative h-48 overflow-hidden">
+      <div className="relative h-40 sm:h-48 overflow-hidden">
         <img
           src={destination.image}
           alt={destination.name}
@@ -55,11 +56,11 @@ export function DestinationCard({
       <div className="p-4 space-y-3">
         <div className="space-y-2">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold text-lg">{destination.name}</h3>
+            <h3 className="font-semibold text-base sm:text-lg">{destination.name}</h3>
             <div className="flex items-center gap-1 text-sm flex-shrink-0">
               <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
               <span className="font-medium">{destination.rating}</span>
-              <span className="text-gray-500">({destination.reviewCount})</span>
+              <span className="hidden sm:inline text-gray-500">({destination.reviewCount})</span>
             </div>
           </div>
           
@@ -78,7 +79,7 @@ export function DestinationCard({
           </div>
           <div className="flex items-center gap-1">
             <MapPin className="w-4 h-4" />
-            <span>₱{destination.estimatedCost}</span>
+            <span>{formatPeso(destination.estimatedCost)}</span>
           </div>
         </div>
 

@@ -6,6 +6,7 @@ import { Badge } from '@/app/components/ui/badge';
 import { Calendar, MapPin, Trash2, Edit, Clock, DollarSign } from 'lucide-react';
 import { getSavedItineraries, deleteItinerary } from '@/app/utils/storage';
 import { fetchItineraries } from '@/app/api/itineraries';
+import { formatPeso } from '@/app/utils/currency';
 
 interface SavedItinerariesViewProps {
   onViewItinerary: (itinerary: SavedItinerary) => void;
@@ -145,7 +146,7 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
                   </div>
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <DollarSign className="w-4 h-4" />
-                    <span>₱{itinerary.totalCost} total cost</span>
+                    <span>{formatPeso(itinerary.totalCost)} total cost</span>
                   </div>
                 </div>
 

@@ -4,6 +4,7 @@ import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { fetchDestinations } from '@/app/api/destinations';
 import { clearAuthSession, getAuthToken, getAuthUser } from '@/app/api/client';
 import { type AuthUser } from '@/app/api/auth';
+import { useIsMobile } from '@/app/components/ui/use-mobile';
 import { getRecommendations, calculateContentScore } from '@/app/utils/recommendation';
 import { PreferenceForm } from '@/app/components/PreferenceForm';
 import { UserLogin } from '@/app/components/UserLogin';
@@ -13,7 +14,7 @@ import { ItineraryView } from '@/app/components/ItineraryView';
 import { SavedItinerariesView } from '@/app/components/SavedItinerariesView';
 import { EditableItineraryView } from '@/app/components/EditableItineraryView';
 import { Button } from '@/app/components/ui/button';
-import { MapPin, Sparkles, BookOpen } from 'lucide-react';
+import { MapPin, Sparkles, BookOpen, Menu } from 'lucide-react';
 import backgroundImage from '@/assets/bulusan-lake.jpg';
 
 type AppView =
@@ -27,6 +28,7 @@ type AppView =
   | 'recommendations';
 
 export default function App() {
+  const isMobile = useIsMobile();
   const [currentView, setCurrentView] = useState<AppView>('welcome');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
@@ -38,6 +40,7 @@ export default function App() {
   const [destinationsStatus, setDestinationsStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [recommendationScores, setRecommendationScores] = useState<Map<string, number>>(new Map());
   const [viewingSavedItinerary, setViewingSavedItinerary] = useState<SavedItinerary | null>(null);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const heroDestinations = allDestinations.slice(0, 3);
   const showHeroGrid = heroDestinations.length === 3;
 
@@ -165,7 +168,144 @@ export default function App() {
     setItinerary([]);
     setViewingSavedItinerary(null);
     setCurrentView('welcome');
+    setIsMobileNavOpen(false);
   };
+
+  const desktopActionButtonClass = 'h-9 px-3';
+  const mobileActionButtonClass = 'w-full justify-start h-10';
+  const handleMobileNavigate = (view: AppView) => {
+    setCurrentView(view);
+    setIsMobileNavOpen(false);
+  };
+  const renderHeaderActions = (mobile: boolean) => (
+    <>
+      {isAuthenticated && (
+        <>
+          {!mobile && (
+            <div className="hidden items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 sm:flex">
+              {currentUser?.name || currentUser?.email || 'Signed in'}
+            </div>
+          )}
+          <Button
+            variant="outline"
+            className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
+            onClick={handleLogout}
+          >
+            Log out
+          </Button>
+        </>
+      )}
+      {currentView === 'welcome' && (
+        <>
+          {!isAuthenticated && (
+            <>
+              <Button
+                className={`${mobile ? mobileActionButtonClass : desktopActionButtonClass} bg-emerald-600 text-white hover:bg-emerald-700`}
+                onClick={() => {
+                  if (mobile) {
+                    handleMobileNavigate('user-signup');
+                    return;
+                  }
+                  setCurrentView('user-signup');
+                }}
+              >
+                Sign Up
+              </Button>
+              <Button
+                variant="outline"
+                className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
+                onClick={() => {
+                  if (mobile) {
+                    handleMobileNavigate('user-login');
+                    return;
+                  }
+                  setCurrentView('user-login');
+                }}
+              >
+                Sign In
+              </Button>
+            </>
+          )}
+          <Button
+            variant="outline"
+            className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
+            onClick={() => {
+              if (mobile) {
+                handleMobileNavigate('saved-itineraries');
+                return;
+              }
+              setCurrentView('saved-itineraries');
+            }}
+          >
+            <BookOpen className="w-4 h-4 mr-2" />
+            View My Itineraries
+          </Button>
+        </>
+      )}
+      {currentView === 'itinerary' && (
+        <Button
+          variant="outline"
+          className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
+          onClick={() => {
+            if (mobile) {
+              handleMobileNavigate('saved-itineraries');
+              return;
+            }
+            setCurrentView('saved-itineraries');
+          }}
+        >
+          <BookOpen className="w-4 h-4 mr-2" />
+          View My Itineraries
+        </Button>
+      )}
+      {currentView === 'edit-saved' && (
+        <Button
+          variant="outline"
+          className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
+          onClick={() => {
+            if (mobile) {
+              handleMobileNavigate('saved-itineraries');
+              return;
+            }
+            setCurrentView('saved-itineraries');
+          }}
+        >
+          <BookOpen className="w-4 h-4 mr-2" />
+          Back to My Itineraries
+        </Button>
+      )}
+      {currentView === 'user-login' && (
+        <Button
+          variant="outline"
+          className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
+          onClick={() => {
+            if (mobile) {
+              handleMobileNavigate('welcome');
+              return;
+            }
+            setCurrentView('welcome');
+          }}
+        >
+          Back to Home
+        </Button>
+      )}
+      {currentView === 'user-signup' && (
+        <Button
+          variant="outline"
+          className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
+          onClick={() => {
+            if (mobile) {
+              handleMobileNavigate('welcome');
+              return;
+            }
+            setCurrentView('welcome');
+          }}
+        >
+          Back to Home
+        </Button>
+      )}
+    </>
+  );
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-slate-50">
@@ -178,8 +318,8 @@ export default function App() {
       <div className="relative z-10">
       {/* Header */}
       <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <div className="flex items-start justify-between sm:items-center">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
                 <MapPin className="w-6 h-6 text-white" />
@@ -189,67 +329,52 @@ export default function App() {
                 <p className="text-sm text-gray-600">Personalized Itinerary Planner</p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-              {isAuthenticated && (
-                <>
-                  <div className="hidden items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 sm:flex">
-                    {currentUser?.name || currentUser?.email || 'Signed in'}
-                  </div>
-                  <Button variant="outline" onClick={handleLogout}>
-                    Log out
-                  </Button>
-                </>
-              )}
-              {currentView === 'welcome' && (
-                <>
-                  {!isAuthenticated && (
-                    <>
-                      <Button className="bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => setCurrentView('user-signup')}>
-                        Sign Up
-                      </Button>
-                      <Button variant="outline" onClick={() => setCurrentView('user-login')}>
-                        Sign In
-                      </Button>
-                    </>
-                  )}
-                  <Button variant="outline" onClick={() => setCurrentView('saved-itineraries')}>
-                    <BookOpen className="w-4 h-4 mr-2" />
-                    View My Itineraries
-                  </Button>
-                </>
-              )}
-              {currentView === 'itinerary' && (
-                <Button variant="outline" onClick={() => setCurrentView('saved-itineraries')}>
-                  <BookOpen className="w-4 h-4 mr-2" />
-                  View My Itineraries
-                </Button>
-              )}
-              {currentView === 'edit-saved' && (
-                <Button variant="outline" onClick={() => setCurrentView('saved-itineraries')}>
-                  <BookOpen className="w-4 h-4 mr-2" />
-                  Back to My Itineraries
-                </Button>
-              )}
-              {currentView === 'user-login' && (
-                <Button variant="outline" onClick={() => setCurrentView('welcome')}>
-                  Back to Home
-                </Button>
-              )}
-              {currentView === 'user-signup' && (
-                <Button variant="outline" onClick={() => setCurrentView('welcome')}>
-                  Back to Home
-                </Button>
-              )}
+            <div className="hidden sm:flex flex-wrap items-center gap-2 sm:justify-end">
+              {renderHeaderActions(false)}
+            </div>
+            <div className="sm:hidden">
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Open navigation menu"
+                onClick={() => setIsMobileNavOpen(true)}
+              >
+                <Menu className="w-5 h-5" />
+              </Button>
             </div>
           </div>
         </div>
       </header>
 
+      {isMobileNavOpen && (
+        <div className="fixed inset-0 z-50 sm:hidden" aria-label="Mobile navigation drawer">
+          <button
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setIsMobileNavOpen(false)}
+            aria-label="Close navigation menu"
+          />
+          <aside className="absolute right-0 top-0 h-full w-[85%] max-w-xs bg-white shadow-xl border-l p-4">
+            <div className="mb-4">
+              <h2 className="text-base font-semibold text-slate-900">Navigation</h2>
+              <p className="text-xs text-slate-600 mt-1">Quick actions and account navigation.</p>
+            </div>
+            <div className="space-y-2">
+              {isAuthenticated && (
+                <div className="rounded-md bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
+                  {currentUser?.name || currentUser?.email || 'Signed in'}
+                </div>
+              )}
+              {renderHeaderActions(true)}
+            </div>
+          </aside>
+        </div>
+      )}
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {currentView === 'welcome' && (
-          <div className="text-center space-y-8 py-12">
-            <div className="space-y-4">
+          <div className="text-center space-y-6 sm:space-y-8 py-8 sm:py-12">
+            <div className="space-y-3 sm:space-y-4">
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full">
                 <Sparkles className="w-5 h-5" />
                 <span className="font-medium">AI-Powered Recommendations</span>
@@ -257,7 +382,7 @@ export default function App() {
               <h2 className="text-3xl font-bold text-gray-900 sm:text-5xl">
                 Discover Bulusan, Sorsogon
               </h2>
-              <p className="text-base text-black-600 font-medium max-w-3xl mx-auto sm:text-xl">
+              <p className="text-sm text-black-600 font-medium max-w-3xl mx-auto sm:text-xl">
                 Let our hybrid recommendation system create a personalized travel itinerary 
                 based on your preferences, interests, and travel style. Experience the best of 
                 Bulusan's natural wonders, cultural heritage, and adventure destinations.
@@ -297,8 +422,8 @@ export default function App() {
             )}
 
             {/* Features */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto text-left">
-              <div className="bg-white p-6 rounded-lg shadow-md">
+            <div className={isMobile ? "flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1 text-left" : "grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto text-left"}>
+              <div className="min-w-[85%] snap-start bg-white p-6 rounded-lg shadow-md sm:min-w-0">
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
                   <Sparkles className="w-6 h-6 text-blue-600" />
                 </div>
@@ -307,7 +432,7 @@ export default function App() {
                   Content-based filtering analyzes your preferences while collaborative filtering learns from similar travelers
                 </p>
               </div>
-              <div className="bg-white p-6 rounded-lg shadow-md">
+              <div className="min-w-[85%] snap-start bg-white p-6 rounded-lg shadow-md sm:min-w-0">
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
                   <MapPin className="w-6 h-6 text-green-600" />
                 </div>
@@ -316,7 +441,7 @@ export default function App() {
                   Multi-constraint knapsack algorithm maximizes value while respecting budget and time limits
                 </p>
               </div>
-              <div className="bg-white p-6 rounded-lg shadow-md">
+              <div className="min-w-[85%] snap-start bg-white p-6 rounded-lg shadow-md sm:min-w-0">
                 <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
                   <Sparkles className="w-6 h-6 text-purple-600" />
                 </div>
@@ -329,13 +454,13 @@ export default function App() {
 
             <Button 
               size="lg" 
-              className="text-lg px-8 py-6"
+              className="w-full sm:w-auto text-base sm:text-lg px-6 sm:px-8 py-5 sm:py-6"
               onClick={handleStartPlanning}
             >
               Start Planning Your Trip!
             </Button>
-            <div className="flex flex-col items-center gap-3 text-sm text-slate-900">
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-1 shadow-sm ring-1 ring-slate-200 backdrop-blur">
+            <div className="flex flex-col items-stretch sm:items-center gap-2 sm:gap-3 text-sm text-slate-900">
+              <div className="inline-flex items-center justify-between gap-2 rounded-full bg-white/90 px-4 py-2 sm:py-1 shadow-sm ring-1 ring-slate-200 backdrop-blur">
                 <span className="font-medium">Already have an account?</span>
                 <button
                   className="font-semibold text-slate-900 transition hover:text-slate-700"
@@ -344,7 +469,7 @@ export default function App() {
                   Log in here.
                 </button>
               </div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-1 shadow-sm ring-1 ring-slate-200 backdrop-blur">
+              <div className="inline-flex items-center justify-between gap-2 rounded-full bg-white/90 px-4 py-2 sm:py-1 shadow-sm ring-1 ring-slate-200 backdrop-blur">
                 <span className="font-medium">New to Bulusan Wanderer?</span>
                 <button
                   className="font-semibold text-slate-900 transition hover:text-slate-700"
