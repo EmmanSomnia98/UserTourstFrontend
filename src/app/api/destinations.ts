@@ -1,5 +1,6 @@
 import { Destination } from '@/app/types/destination';
 import { apiGet } from '@/app/api/client';
+import { resolveAssetUrl } from '@/app/api/client';
 
 type DestinationPayload =
   | Destination[]
@@ -45,6 +46,7 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
       id: String(item.id ?? item._id ?? item.destinationId ?? fallbackId),
       duration: normalizeDuration(item),
       location: normalizeLocation(item),
+      image: resolveAssetUrl(item.image),
     } as Destination;
   });
 }

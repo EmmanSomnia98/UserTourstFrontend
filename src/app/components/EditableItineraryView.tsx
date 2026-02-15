@@ -5,8 +5,9 @@ import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Separator } from '@/app/components/ui/separator';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
-import { Calendar, Clock, MapPin, Trash2, Plus, Save, X, Edit2, Wallet } from 'lucide-react';
+import { Calendar, Clock, Trash2, Plus, Save, X, Edit2, Wallet } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { updateItineraryName, deleteItinerary, saveItinerary } from '@/app/utils/storage';
 import { formatPeso } from '@/app/utils/currency';
@@ -25,6 +26,7 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
   const [itineraryName, setItineraryName] = useState(savedItinerary.name);
   const [showAddDestinations, setShowAddDestinations] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
   const getDuration = (value: number) => (Number.isFinite(value) ? value : 0);
 
   const schedule = calculateItinerarySchedule(destinations, tripDays);
@@ -199,7 +201,7 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
                     <div className="flex items-center gap-2 text-xs text-gray-600">
                       <Clock className="w-3 h-3" />
                       <span>{dest.duration}h</span>
-                      <MapPin className="w-3 h-3 ml-2" />
+                      <Wallet className="w-3 h-3 ml-2" />
                       <span>{formatPeso(dest.estimatedCost)}</span>
                     </div>
                   </div>
@@ -249,7 +251,18 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
                   <div key={dest.id ?? `${dest.name}-${day}-${index}`} className="relative">
                     <div className="absolute -left-8 top-4 w-4 h-4 bg-white border-2 border-blue-500 rounded-full"></div>
                     
-                    <Card className="p-4 hover:shadow-md transition-shadow">
+                    <Card
+                      className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedDestination(dest)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setSelectedDestination(dest);
+                        }
+                      }}
+                    >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex gap-3 sm:gap-4 flex-1">
                           <img
@@ -278,7 +291,7 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
                                 <span>{getDuration(dest.duration)}h</span>
                               </div>
                               <div className="flex items-center gap-1">
-                                <MapPin className="w-4 h-4" />
+                                <Wallet className="w-4 h-4" />
                                 <span>{formatPeso(dest.estimatedCost)}</span>
                               </div>
                             </div>
@@ -290,7 +303,10 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleRemoveDestination(dest.id)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleRemoveDestination(dest.id);
+                            }}
                             className="flex-shrink-0"
                           >
                             <Trash2 className="w-4 h-4 text-red-500" />
@@ -324,6 +340,51 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
           </Button>
         </div>
       </Card>
+
+      <Dialog
+        open={selectedDestination !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            setSelectedDestination(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-2xl">
+          {selectedDestination && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{selectedDestination.name}</DialogTitle>
+                <DialogDescription>
+                  Destination details from this saved itinerary.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <img
+                  src={selectedDestination.image}
+                  alt={selectedDestination.name}
+                  className="w-full h-56 sm:h-72 object-cover rounded-lg"
+                />
+                <p className="text-sm text-gray-700">{selectedDestination.description}</p>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="secondary">{selectedDestination.type}</Badge>
+                  <Badge variant="outline">{selectedDestination.difficulty}</Badge>
+                </div>
+                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="w-4 h-4" />
+                    {getDuration(selectedDestination.duration)}h
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Wallet className="w-4 h-4" />
+                    {formatPeso(selectedDestination.estimatedCost)}
+                  </span>
+                </div>
+                <TravelModeBadges destination={selectedDestination} />
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,9 +1,35 @@
-const REMOTE_API_BASE_URL = 'https://backend-thesis-userxadmin-new.vercel.app';
+export const REMOTE_API_BASE_URL = 'https://backend-thesis-userxadmin-new.vercel.app';
 const AUTH_TOKEN_KEY = 'bw_auth_token';
 const AUTH_USER_KEY = 'bw_auth_user';
 
 const DEFAULT_API_BASE_URL = import.meta.env.DEV ? '' : REMOTE_API_BASE_URL;
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/+$/, '');
+const ASSET_BASE_URL = (import.meta.env.VITE_ASSET_BASE_URL || REMOTE_API_BASE_URL).replace(/\/+$/, '');
+
+export function resolveAssetUrl(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const raw = value.trim();
+  if (!raw) return '';
+
+  if (
+    raw.startsWith('http://') ||
+    raw.startsWith('https://') ||
+    raw.startsWith('data:') ||
+    raw.startsWith('blob:')
+  ) {
+    return raw;
+  }
+
+  if (raw.startsWith('//')) {
+    return `https:${raw}`;
+  }
+
+  if (raw.startsWith('/')) {
+    return `${ASSET_BASE_URL}${raw}`;
+  }
+
+  return `${ASSET_BASE_URL}/${raw}`;
+}
 
 export type AuthSession<UserShape = unknown> = {
   token?: string;

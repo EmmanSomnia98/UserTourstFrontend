@@ -1,4 +1,4 @@
-import { apiGet, apiPost, getAuthToken } from '@/app/api/client';
+import { apiGet, apiPost, getAuthToken, resolveAssetUrl } from '@/app/api/client';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { Destination } from '@/app/types/destination';
 
@@ -50,6 +50,7 @@ function toDestinationList(items: BackendItineraryDestination[] | undefined): De
             ...destination,
             duration: normalizeDuration(destination),
             location: normalizeLocation(destination),
+            image: resolveAssetUrl(destination.image),
           } as Destination)
         : destination
     )
