@@ -1,4 +1,4 @@
-import { apiGet, apiPost, getAuthToken, resolveAssetUrl } from '@/app/api/client';
+import { apiDelete, apiGet, apiPost, clearAuthSession, getAuthToken, resolveAssetUrl } from '@/app/api/client';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { Destination } from '@/app/types/destination';
 
@@ -147,8 +147,19 @@ function extractItineraries(payload: ItineraryPayload): SavedItinerary[] {
 }
 
 export async function fetchItineraries(): Promise<SavedItinerary[]> {
-  const payload = await apiGet<ItineraryPayload>('/api/itineraries');
-  return extractItineraries(payload);
+  const token = getAuthToken();
+  if (!token) return [];
+
+  try {
+    const payload = await apiGet<ItineraryPayload>('/api/itineraries');
+    return extractItineraries(payload);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('(401)')) {
+      clearAuthSession();
+      return [];
+    }
+    throw error;
+  }
 }
 
 type CreateItineraryResponse =
@@ -181,4 +192,20 @@ export async function createItinerary(itinerary: SavedItinerary): Promise<SavedI
   const created = normalizeCreatedItinerary(response);
   if (!created) return null;
   return mapBackendItinerary(created, 0);
+}
+
+export async function deleteRemoteItinerary(id: string): Promise<boolean> {
+  const token = getAuthToken();
+  if (!token) return false;
+
+  try {
+    await apiDelete(`/api/itineraries/${encodeURIComponent(id)}`);
+    return true;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('(401)')) {
+      clearAuthSession();
+      return false;
+    }
+    throw error;
+  }
 }

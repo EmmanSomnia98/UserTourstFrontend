@@ -215,84 +215,67 @@ export function getRecommendations(
  */
 export function calculateItinerarySchedule(
   selectedDestinations: Destination[],
-  tripDays: number
+  tripDays: number,
+  userInterests: string[] = []
 ): Map<number, Destination[]> {
   const schedule = new Map<number, Destination[]>();
   const totalDays = Math.max(1, Math.floor(tripDays));
-  const maxHoursPerDay = 8;
 
   for (let day = 1; day <= totalDays; day++) {
     schedule.set(day, []);
   }
 
-  const getDuration = (dest: Destination) => {
-    const value = Number(dest.duration);
-    return Number.isFinite(value) && value > 0 ? value : 0;
-  };
-  
-  // Sort destinations intelligently:
-  // 1. Challenging activities first (when energy is highest)
-  // 2. Then by duration (longer activities first)
-  // 3. Spread different types across days
-  const sorted = [...selectedDestinations].sort((a, b) => {
-    // Difficulty priority
-    const difficultyOrder = { challenging: 3, moderate: 2, easy: 1 };
-    const diffA = difficultyOrder[a.difficulty];
-    const diffB = difficultyOrder[b.difficulty];
-    
-    if (diffA !== diffB) {
-      return diffB - diffA;
+  const normalize = (value: string) => value.trim().toLowerCase();
+  const normalizedUserInterests = userInterests.map(normalize).filter(Boolean);
+  const interestPriority = new Map<string, number>();
+  normalizedUserInterests.forEach((interest, index) => {
+    if (!interestPriority.has(interest)) {
+      interestPriority.set(interest, index);
     }
-    
-    // Duration as secondary
-    return getDuration(b) - getDuration(a);
   });
-  
-  const dayHours = Array.from({ length: totalDays }, () => 0);
-  const seedDays = Math.min(totalDays, sorted.length);
 
-  // First pass: ensure we spread one activity per day when possible.
-  for (let i = 0; i < seedDays; i++) {
-    const day = i + 1;
-    const destination = sorted[i];
-    const duration = getDuration(destination);
-    const dayDestinations = schedule.get(day) || [];
-    dayDestinations.push(destination);
-    schedule.set(day, dayDestinations);
-    dayHours[i] += duration;
-  }
+  // Keep AI order by default, but prioritize stronger interest/sub-interest matches first.
+  const destinations = [...selectedDestinations]
+    .map((destination, originalIndex) => {
+      const destinationInterests = (destination.interests ?? []).map(normalize).filter(Boolean);
+      let matchCount = 0;
+      let bestPriority = Number.POSITIVE_INFINITY;
 
-  // Second pass: place remaining activities on the lightest suitable day.
-  for (let i = seedDays; i < sorted.length; i++) {
-    const destination = sorted[i];
-    const duration = getDuration(destination);
-
-    let bestDayIndex = 0;
-    let bestDayHours = Number.POSITIVE_INFINITY;
-
-    for (let dayIndex = 0; dayIndex < totalDays; dayIndex++) {
-      const projectedHours = dayHours[dayIndex] + duration;
-      const isWithinLimit = projectedHours <= maxHoursPerDay;
-      if (isWithinLimit && dayHours[dayIndex] < bestDayHours) {
-        bestDayIndex = dayIndex;
-        bestDayHours = dayHours[dayIndex];
-      }
-    }
-
-    if (bestDayHours === Number.POSITIVE_INFINITY) {
-      for (let dayIndex = 0; dayIndex < totalDays; dayIndex++) {
-        if (dayHours[dayIndex] < dayHours[bestDayIndex]) {
-          bestDayIndex = dayIndex;
+      for (const destinationInterest of destinationInterests) {
+        for (const userInterest of normalizedUserInterests) {
+          const isMatch =
+            destinationInterest.includes(userInterest) ||
+            userInterest.includes(destinationInterest);
+          if (!isMatch) continue;
+          matchCount += 1;
+          const priority = interestPriority.get(userInterest) ?? Number.POSITIVE_INFINITY;
+          if (priority < bestPriority) {
+            bestPriority = priority;
+          }
         }
       }
-    }
 
-    const day = bestDayIndex + 1;
+      return {
+        destination,
+        originalIndex,
+        matchCount,
+        bestPriority,
+      };
+    })
+    .sort((a, b) => {
+      if (a.matchCount !== b.matchCount) return b.matchCount - a.matchCount;
+      if (a.bestPriority !== b.bestPriority) return a.bestPriority - b.bestPriority;
+      return a.originalIndex - b.originalIndex;
+    })
+    .map((item) => item.destination);
+
+  destinations.forEach((destination, index) => {
+    const dayIndex = index % totalDays;
+    const day = dayIndex + 1;
     const dayDestinations = schedule.get(day) || [];
     dayDestinations.push(destination);
     schedule.set(day, dayDestinations);
-    dayHours[bestDayIndex] += duration;
-  }
+  });
   
   return schedule;
 }

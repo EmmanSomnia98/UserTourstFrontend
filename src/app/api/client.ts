@@ -57,9 +57,13 @@ export function setAuthSession<UserShape = unknown>(token?: string, user?: UserS
   try {
     if (token) {
       localStorage.setItem(AUTH_TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
     }
     if (user !== undefined) {
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    } else {
+      localStorage.removeItem(AUTH_USER_KEY);
     }
   } catch {
     // Swallow storage errors (private mode, disabled storage, etc.)
@@ -96,7 +100,16 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T
     throw new Error(`Request failed (${response.status}): ${text || response.statusText}`);
   }
 
-  return response.json() as Promise<T>;
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const text = await response.text();
+  if (!text) {
+    return undefined as T;
+  }
+
+  return JSON.parse(text) as T;
 }
 
 export async function apiGet<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -113,4 +126,8 @@ export async function apiPost<T>(path: string, body: unknown, options: RequestIn
     headers,
     body: payload,
   });
+}
+
+export async function apiDelete<T = void>(path: string, options: RequestInit = {}): Promise<T> {
+  return apiRequest<T>(path, { ...options, method: 'DELETE' });
 }

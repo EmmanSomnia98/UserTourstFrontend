@@ -3,9 +3,9 @@ import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
-import { Calendar, MapPin, Trash2, Edit, Clock, DollarSign } from 'lucide-react';
+import { Calendar, MapPin, Trash2, Edit, DollarSign } from 'lucide-react';
 import { getSavedItineraries, deleteItinerary } from '@/app/utils/storage';
-import { fetchItineraries } from '@/app/api/itineraries';
+import { deleteRemoteItinerary, fetchItineraries } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
 
 interface SavedItinerariesViewProps {
@@ -17,6 +17,8 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
   const [savedItineraries, setSavedItineraries] = useState<SavedItinerary[]>([]);
   const [status, setStatus] = useState<'loading' | 'idle' | 'error'>('loading');
   const [isRemote, setIsRemote] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -47,11 +49,30 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
     };
   }, []);
 
-  const handleDelete = (id: string) => {
-    if (isRemote) return;
+  const handleDelete = async (id: string) => {
+    if (!id) return;
     if (confirm('Are you sure you want to delete this itinerary?')) {
-      deleteItinerary(id);
-      setSavedItineraries(getSavedItineraries());
+      setDeleteError(null);
+      setDeletingId(id);
+      try {
+        if (isRemote) {
+          const deleted = await deleteRemoteItinerary(id);
+          if (!deleted) {
+            setDeleteError('Please sign in again to delete server itineraries.');
+            return;
+          }
+          setSavedItineraries((current) => current.filter((item) => item.id !== id));
+          return;
+        }
+
+        deleteItinerary(id);
+        setSavedItineraries(getSavedItineraries());
+      } catch (error) {
+        console.error('Failed to delete itinerary:', error);
+        setDeleteError(error instanceof Error ? error.message : 'Failed to delete itinerary.');
+      } finally {
+        setDeletingId(null);
+      }
     }
   };
 
@@ -87,6 +108,12 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
       {status === 'error' && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           We couldn&apos;t load itineraries from the server. Showing local data instead.
+        </div>
+      )}
+
+      {deleteError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {deleteError}
         </div>
       )}
 
@@ -141,10 +168,6 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
                     <span>{itinerary.destinations.length} destinations</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Clock className="w-4 h-4" />
-                    <span>{itinerary.totalDuration} hours of activities</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
                     <DollarSign className="w-4 h-4" />
                     <span>{formatPeso(itinerary.totalCost)} total cost</span>
                   </div>
@@ -179,9 +202,9 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
                   <Button 
                     variant="outline"
                     size="icon"
-                    onClick={() => handleDelete(itinerary.id)}
-                    disabled={isRemote}
-                    title={isRemote ? 'Delete is not available for server itineraries yet.' : 'Delete itinerary'}
+                    onClick={() => void handleDelete(itinerary.id)}
+                    disabled={deletingId === itinerary.id}
+                    title={deletingId === itinerary.id ? 'Deleting itinerary...' : 'Delete itinerary'}
                   >
                     <Trash2 className="w-4 h-4 text-red-500" />
                   </Button>

@@ -57,10 +57,14 @@ export default function App() {
   useEffect(() => {
     const storedToken = getAuthToken();
     const storedUser = getAuthUser<AuthUser>();
-    if (storedToken || storedUser) {
+    if (storedToken) {
       setIsAuthenticated(true);
       setCurrentUser(storedUser ?? null);
+      return;
     }
+    if (storedUser) clearAuthSession();
+    setIsAuthenticated(false);
+    setCurrentUser(null);
   }, []);
 
   useEffect(() => {
@@ -87,9 +91,8 @@ export default function App() {
   const handlePreferencesSubmit = (prefs: UserPreferences) => {
     setPreferences(prefs);
     
-    // Automatically generate a complete itinerary using hybrid algorithm with knapsack optimization
-    const desiredLimit = Math.max(10, prefs.duration * 2);
-    const recommended = getRecommendations(allDestinations, prefs, desiredLimit);
+    // Let the recommender decide item count based on AI scoring + user preferences.
+    const recommended = getRecommendations(allDestinations, prefs);
     
     // Set the recommendations as the itinerary automatically
     setItinerary(recommended);
@@ -594,8 +597,9 @@ export default function App() {
           <div className="py-8">
             <UserLogin
               onLogin={(session) => {
-                setIsAuthenticated(true);
-                setCurrentUser(session.user ?? null);
+                const hasToken = Boolean(session.token);
+                setIsAuthenticated(hasToken);
+                setCurrentUser(hasToken ? (session.user ?? null) : null);
                 setCurrentView('welcome');
               }}
               onBack={() => setCurrentView('welcome')}
@@ -607,8 +611,9 @@ export default function App() {
           <div className="py-8">
             <UserSignup
               onSignup={(session) => {
-                setIsAuthenticated(true);
-                setCurrentUser(session.user ?? null);
+                const hasToken = Boolean(session.token);
+                setIsAuthenticated(hasToken);
+                setCurrentUser(hasToken ? (session.user ?? null) : null);
                 setCurrentView('welcome');
               }}
               onBack={() => setCurrentView('welcome')}
@@ -639,6 +644,7 @@ export default function App() {
           <ItineraryView
             destinations={itinerary}
             tripDays={preferences.duration}
+            userInterests={preferences.interests}
             onRemoveDestination={handleRemoveFromItinerary}
             onReset={handleReset}
             allDestinations={allDestinations}

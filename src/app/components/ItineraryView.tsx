@@ -24,6 +24,7 @@ import { formatPeso } from '@/app/utils/currency';
 interface ItineraryViewProps {
   destinations: Destination[];
   tripDays: number;
+  userInterests?: string[];
   onRemoveDestination: (destinationId: string) => void;
   onReset: () => void;
   onSaveSuccess?: () => void;
@@ -34,6 +35,7 @@ interface ItineraryViewProps {
 export function ItineraryView({
   destinations,
   tripDays,
+  userInterests = [],
   onRemoveDestination,
   onReset,
   onSaveSuccess,
@@ -47,7 +49,7 @@ export function ItineraryView({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
   const getDuration = (value: number) => (Number.isFinite(value) ? value : 0);
-  const schedule = calculateItinerarySchedule(destinations, tripDays);
+  const schedule = calculateItinerarySchedule(destinations, tripDays, userInterests);
   const emptyDays = Array.from(schedule.entries()).filter(([, dayDestinations]) => dayDestinations.length === 0).length;
   
   const totalCost = destinations.reduce((sum, dest) => sum + dest.estimatedCost, 0);
@@ -110,7 +112,7 @@ export function ItineraryView({
     schedule.forEach((dayDestinations, day) => {
       itineraryText += `Day ${day}:\n`;
       dayDestinations.forEach(dest => {
-        itineraryText += `  - ${dest.name} (${dest.duration}h, ${formatPeso(dest.estimatedCost)})\n`;
+        itineraryText += `  - ${dest.name} (${formatPeso(dest.estimatedCost)})\n`;
       });
       itineraryText += `\n`;
     });
@@ -163,16 +165,11 @@ export function ItineraryView({
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="text-center p-4 bg-blue-50 rounded-lg">
               <Calendar className="w-6 h-6 mx-auto mb-2 text-blue-600" />
               <div className="text-2xl font-semibold">{tripDays}</div>
               <div className="text-sm text-gray-600">Days</div>
-            </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <Clock className="w-6 h-6 mx-auto mb-2 text-green-600" />
-              <div className="text-2xl font-semibold">{totalDuration}h</div>
-              <div className="text-sm text-gray-600">Total Time</div>
             </div>
             <div className="text-center p-4 bg-purple-50 rounded-lg">
               <Wallet className="w-6 h-6 mx-auto mb-2 text-purple-600" />
@@ -244,10 +241,6 @@ export function ItineraryView({
                           </div>
 
                           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 pt-1">
-                            <div className="flex items-center gap-1">
-                              <Clock className="w-4 h-4" />
-                              <span>{getDuration(dest.duration)}h</span>
-                            </div>
                             <div className="flex items-center gap-1">
                               <Wallet className="w-4 h-4" />
                               <span>{formatPeso(dest.estimatedCost)}</span>
@@ -390,10 +383,6 @@ export function ItineraryView({
                   <Badge variant="outline">{selectedDestination.difficulty}</Badge>
                 </div>
                 <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
-                    {getDuration(selectedDestination.duration)}h
-                  </span>
                   <span className="inline-flex items-center gap-1">
                     <Wallet className="w-4 h-4" />
                     {formatPeso(selectedDestination.estimatedCost)}
