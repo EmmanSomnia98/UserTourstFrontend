@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from '@/app/components/ui/dialog';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
-import { Calendar, Clock, Trash2, Download, Share2, Save, Plus, Wallet } from 'lucide-react';
+import { Calendar, Trash2, Download, Share2, Wallet } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { createItinerary } from '@/app/api/itineraries';
@@ -190,9 +190,6 @@ export function ItineraryView({
               </div>
               <div>
                 <h3 className="font-semibold text-lg">Day {day}</h3>
-                <p className="text-sm text-gray-600">
-                  {dayDestinations.reduce((sum, d) => sum + getDuration(d.duration), 0)} hours of activities
-                </p>
               </div>
             </div>
 

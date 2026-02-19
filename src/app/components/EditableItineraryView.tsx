@@ -276,9 +276,6 @@ export function EditableItineraryView({
                 </div>
                 <div>
                   <h3 className="font-semibold text-lg">Day {day}</h3>
-                  <p className="text-sm text-gray-600">
-                    {dayDestinations.reduce((sum, d) => sum + getDuration(d.duration), 0)} hours of activities
-                  </p>
                 </div>
               </div>
 
