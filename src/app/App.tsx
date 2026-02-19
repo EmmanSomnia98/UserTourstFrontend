@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Destination, UserPreferences } from '@/app/types/destination';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { fetchDestinations } from '@/app/api/destinations';
+import { fetchServerRecommendations } from '@/app/api/recommendations';
 import { clearAuthSession, getAuthToken, getAuthUser } from '@/app/api/client';
 import { type AuthUser } from '@/app/api/auth';
+import { buildFeedbackEvent, flushFeedbackQueue, recordFeedbackEvent } from '@/app/api/feedback';
 import { useIsMobile } from '@/app/components/ui/use-mobile';
-import { getRecommendations, calculateContentScore } from '@/app/utils/recommendation';
+import { calculateContentScore } from '@/app/utils/recommendation';
 import { PreferenceForm } from '@/app/components/PreferenceForm';
 import { UserLogin } from '@/app/components/UserLogin';
 import { UserSignup } from '@/app/components/UserSignup';
@@ -48,11 +50,17 @@ export default function App() {
   const [destinationsStatus, setDestinationsStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [recommendationScores, setRecommendationScores] = useState<Map<string, number>>(new Map());
   const [viewingSavedItinerary, setViewingSavedItinerary] = useState<SavedItinerary | null>(null);
+  const [lastRecommendationRequestId, setLastRecommendationRequestId] = useState<string | null>(null);
+  const [lastRecommendationModelVersion, setLastRecommendationModelVersion] = useState<string | null>(null);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [logoutStep, setLogoutStep] = useState<'confirm' | 'thanks'>('confirm');
   const heroDestinations = allDestinations.slice(0, 3);
   const showHeroGrid = heroDestinations.length === 3;
+  const feedbackIdentity = {
+    userId: currentUser?.id,
+    userEmail: currentUser?.email,
+  };
 
   useEffect(() => {
     const storedToken = getAuthToken();
@@ -88,46 +96,149 @@ export default function App() {
     };
   }, []);
 
-  const handlePreferencesSubmit = (prefs: UserPreferences) => {
-    setPreferences(prefs);
-    
-    // Let the recommender decide item count based on AI scoring + user preferences.
-    const recommended = getRecommendations(allDestinations, prefs);
-    
-    // Set the recommendations as the itinerary automatically
-    setItinerary(recommended);
-    
-    // Calculate and store scores for display
+  useEffect(() => {
+    void flushFeedbackQueue();
+  }, [currentUser?.id, currentUser?.email]);
+
+  const trackEvent = (
+    eventType: Parameters<typeof buildFeedbackEvent>[0],
+    payload: {
+      destinationId?: string;
+      itineraryId?: string;
+      metadata?: Record<string, unknown>;
+    } = {}
+  ) => {
+    recordFeedbackEvent(buildFeedbackEvent(eventType, feedbackIdentity, payload));
+  };
+
+  const normalizeScores = (scoreById: Map<string, number>): Map<string, number> => {
+    const normalized = new Map<string, number>();
+    if (scoreById.size === 0) return normalized;
+    const max = Math.max(...Array.from(scoreById.values()));
+    if (max <= 0) {
+      scoreById.forEach((_, id) => normalized.set(id, 0));
+      return normalized;
+    }
+    scoreById.forEach((score, id) => {
+      normalized.set(id, (score / max) * 100);
+    });
+    return normalized;
+  };
+
+  const calculateDisplayScores = (items: Destination[], prefs: UserPreferences): Map<string, number> => {
     const scores = new Map<string, number>();
-    
-    // Find max score for normalization
     let maxScore = 0;
-    recommended.forEach(dest => {
+    items.forEach((dest) => {
       const score = calculateContentScore(dest, prefs);
       if (score > maxScore) maxScore = score;
     });
-    
-    // Normalize scores to 0-100 for display
-    recommended.forEach(dest => {
+    items.forEach((dest) => {
       const score = calculateContentScore(dest, prefs);
       const normalizedScore = maxScore > 0 ? (score / maxScore) * 100 : 0;
       scores.set(dest.id, normalizedScore);
     });
-    
-    setRecommendationScores(scores);
-    
-    // Go directly to itinerary view
+    return scores;
+  };
+
+  const applyRecommendations = (
+    recommended: Destination[],
+    prefs: UserPreferences,
+    serverScores?: Map<string, number>
+  ) => {
+    setRecommendations(recommended);
+    setItinerary(recommended);
+    if (serverScores && serverScores.size > 0) {
+      setRecommendationScores(normalizeScores(serverScores));
+    } else {
+      setRecommendationScores(calculateDisplayScores(recommended, prefs));
+    }
     setCurrentView('itinerary');
+  };
+
+  const handlePreferencesSubmit = async (prefs: UserPreferences) => {
+    setPreferences(prefs);
+    const serverResult = await fetchServerRecommendations(prefs, 6, allDestinations);
+    if (serverResult.destinations.length === 0) {
+      const hasBudgetConstraint = Number.isFinite(prefs.budget) && prefs.budget > 0;
+      if (hasBudgetConstraint) {
+        throw new Error(
+          `No destinations fit your budget of ₱${Math.round(prefs.budget)} per day for ${prefs.duration} day(s). ` +
+          'Try increasing your budget or changing your interests.'
+        );
+      }
+      throw new Error('No destinations matched your current preferences. Try selecting different interests.');
+    }
+    setLastRecommendationRequestId(serverResult.metadata.recommendationRequestId ?? null);
+    setLastRecommendationModelVersion(serverResult.metadata.modelVersion ?? null);
+    applyRecommendations(serverResult.destinations, prefs, serverResult.scores);
+
+    trackEvent('recommendation_requested', {
+      metadata: {
+        recommendationRequestId: serverResult.metadata.recommendationRequestId,
+        modelVersion: serverResult.metadata.modelVersion,
+        requestedLimit: 6,
+        returnedCount: serverResult.destinations.length,
+        budget: prefs.budget,
+        duration: prefs.duration,
+        interestCount: prefs.interests.length,
+        travelStyleCount: prefs.travelStyle.length,
+      },
+    });
+
+    serverResult.destinations.forEach((destination, index) => {
+      trackEvent('recommendation_impression', {
+        destinationId: destination.id,
+        metadata: {
+          rank: index + 1,
+          recommendationRequestId: serverResult.metadata.recommendationRequestId,
+          modelVersion: serverResult.metadata.modelVersion,
+          score: serverResult.scores.get(destination.id),
+        },
+      });
+    });
   };
 
   const handleAddToItinerary = (destination: Destination) => {
     if (!itinerary.some(item => item.id === destination.id)) {
       setItinerary([...itinerary, destination]);
+      const recommendationIndex = recommendations.findIndex((item) => item.id === destination.id);
+      trackEvent('destination_added', {
+        destinationId: destination.id,
+        metadata: {
+          source: recommendationIndex >= 0 ? 'recommended' : 'manual',
+          rank: recommendationIndex >= 0 ? recommendationIndex + 1 : undefined,
+          recommendationRequestId: lastRecommendationRequestId,
+          modelVersion: lastRecommendationModelVersion,
+        },
+      });
     }
   };
 
   const handleRemoveFromItinerary = (destinationId: string) => {
+    const removed = itinerary.find((item) => item.id === destinationId);
     setItinerary(itinerary.filter(item => item.id !== destinationId));
+    if (removed) {
+      trackEvent('destination_removed', {
+        destinationId: removed.id,
+        metadata: {
+          recommendationRequestId: lastRecommendationRequestId,
+          modelVersion: lastRecommendationModelVersion,
+        },
+      });
+    }
+  };
+
+  const handleItinerarySaved = (savedItinerary: SavedItinerary) => {
+    trackEvent('itinerary_saved', {
+      itineraryId: savedItinerary.id,
+      metadata: {
+        destinationCount: savedItinerary.destinations.length,
+        totalCost: savedItinerary.totalCost,
+        totalDuration: savedItinerary.totalDuration,
+        recommendationRequestId: lastRecommendationRequestId,
+        modelVersion: lastRecommendationModelVersion,
+      },
+    });
   };
 
   const handleReset = () => {
@@ -147,6 +258,14 @@ export default function App() {
   };
 
   const handleViewSavedItinerary = (savedItinerary: SavedItinerary) => {
+    trackEvent('saved_itinerary_viewed', {
+      itineraryId: savedItinerary.id,
+      metadata: {
+        destinationCount: savedItinerary.destinations.length,
+        totalCost: savedItinerary.totalCost,
+        tripDays: savedItinerary.tripDays,
+      },
+    });
     setViewingSavedItinerary(savedItinerary);
     setItinerary(savedItinerary.destinations);
     setPreferences({ 
@@ -457,9 +576,9 @@ export default function App() {
                 Discover Bulusan, Sorsogon
               </h2>
               <p className="text-sm text-black-600 font-medium max-w-3xl mx-auto sm:text-xl">
-                Let our hybrid recommendation system create a personalized travel itinerary 
-                based on your preferences, interests, and travel style. Experience the best of 
-                Bulusan's natural wonders, cultural heritage, and adventure destinations.
+                Let our AI recommendation engine generate a personalized travel itinerary
+                based on your preferences, interests, and travel style. Experience the best of
+                Bulusan&apos;s natural wonders, cultural heritage, and adventure destinations.
               </p>
             </div>
 
@@ -501,18 +620,18 @@ export default function App() {
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
                   <Sparkles className="w-6 h-6 text-blue-600" />
                 </div>
-                <h3 className="font-semibold text-lg mb-2">Hybrid Recommendation System</h3>
+                <h3 className="font-semibold text-lg mb-2">AI Recommendation Engine</h3>
                 <p className="text-gray-600 text-sm">
-                  Content-based filtering analyzes your preferences while collaborative filtering learns from similar travelers
+                  Our backend AI service scores destinations using your trip preferences and profile signals
                 </p>
               </div>
               <div className="min-w-[85%] snap-start bg-white p-6 rounded-lg shadow-md sm:min-w-0">
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
                   <MapPin className="w-6 h-6 text-green-600" />
                 </div>
-                <h3 className="font-semibold text-lg mb-2">Knapsack Optimization</h3>
+                <h3 className="font-semibold text-lg mb-2">Route and Budget Aware</h3>
                 <p className="text-gray-600 text-sm">
-                  Multi-constraint knapsack algorithm maximizes value while respecting budget and time limits
+                  Recommendations are tailored to your available time and spending preferences
                 </p>
               </div>
               <div className="min-w-[85%] snap-start bg-white p-6 rounded-lg shadow-md sm:min-w-0">
@@ -647,6 +766,7 @@ export default function App() {
             userInterests={preferences.interests}
             onRemoveDestination={handleRemoveFromItinerary}
             onReset={handleReset}
+            onSaveSuccess={handleItinerarySaved}
             allDestinations={allDestinations}
             onAddDestination={handleAddToItinerary}
           />
@@ -656,6 +776,9 @@ export default function App() {
           <SavedItinerariesView
             onViewItinerary={handleViewSavedItinerary}
             onBackToWelcome={handleBackToWelcome}
+            onDeleteItinerarySuccess={(itineraryId) => {
+              trackEvent('saved_itinerary_deleted', { itineraryId });
+            }}
           />
         )}
 
@@ -664,6 +787,18 @@ export default function App() {
             savedItinerary={viewingSavedItinerary}
             allDestinations={allDestinations}
             onBack={() => setCurrentView('saved-itineraries')}
+            onSaveChangesSuccess={(savedItinerary) => {
+              trackEvent('saved_itinerary_updated', {
+                itineraryId: savedItinerary.id,
+                metadata: {
+                  destinationCount: savedItinerary.destinations.length,
+                  totalCost: savedItinerary.totalCost,
+                },
+              });
+            }}
+            onDeleteSuccess={(itineraryId) => {
+              trackEvent('saved_itinerary_deleted', { itineraryId });
+            }}
             onUpdate={() => {
               // Refresh the saved itinerary list when updates are made
               setViewingSavedItinerary(null);
@@ -676,8 +811,8 @@ export default function App() {
       <footer className="bg-white border-t mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="text-center text-gray-600 text-sm">
-            <p>© 2026 Bulusan Wanderer. Personalized itinerary planning powered by hybrid recommendation algorithms.</p>
-            <p className="mt-2">Combining content-based filtering with collaborative patterns for optimal travel experiences.</p>
+            <p>© 2026 Bulusan Wanderer. Personalized itinerary planning powered by backend AI recommendations.</p>
+            <p className="mt-2">Built for adaptive, data-driven travel planning in Bulusan, Sorsogon.</p>
           </div>
         </div>
       </footer>
@@ -685,3 +820,5 @@ export default function App() {
     </div>
   );
 }
+
+

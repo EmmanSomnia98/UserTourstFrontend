@@ -3,22 +3,27 @@ import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { Calendar, MapPin, Trash2, Edit, DollarSign } from 'lucide-react';
-import { getSavedItineraries, deleteItinerary } from '@/app/utils/storage';
 import { deleteRemoteItinerary, fetchItineraries } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
 
 interface SavedItinerariesViewProps {
   onViewItinerary: (itinerary: SavedItinerary) => void;
   onBackToWelcome: () => void;
+  onDeleteItinerarySuccess?: (itineraryId: string) => void;
 }
 
-export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: SavedItinerariesViewProps) {
+export function SavedItinerariesView({
+  onViewItinerary,
+  onBackToWelcome,
+  onDeleteItinerarySuccess
+}: SavedItinerariesViewProps) {
   const [savedItineraries, setSavedItineraries] = useState<SavedItinerary[]>([]);
   const [status, setStatus] = useState<'loading' | 'idle' | 'error'>('loading');
-  const [isRemote, setIsRemote] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -26,21 +31,13 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
     fetchItineraries()
       .then((data) => {
         if (!isMounted) return;
-        if (data.length === 0) {
-          setSavedItineraries(getSavedItineraries());
-          setIsRemote(false);
-          setStatus('idle');
-          return;
-        }
         setSavedItineraries(data);
-        setIsRemote(true);
         setStatus('idle');
       })
       .catch((error) => {
         console.error('Failed to load itineraries:', error);
         if (!isMounted) return;
-        setSavedItineraries(getSavedItineraries());
-        setIsRemote(false);
+        setSavedItineraries([]);
         setStatus('error');
       });
 
@@ -51,28 +48,27 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
 
   const handleDelete = async (id: string) => {
     if (!id) return;
-    if (confirm('Are you sure you want to delete this itinerary?')) {
-      setDeleteError(null);
-      setDeletingId(id);
-      try {
-        if (isRemote) {
-          const deleted = await deleteRemoteItinerary(id);
-          if (!deleted) {
-            setDeleteError('Please sign in again to delete server itineraries.');
-            return;
-          }
-          setSavedItineraries((current) => current.filter((item) => item.id !== id));
-          return;
-        }
-
-        deleteItinerary(id);
-        setSavedItineraries(getSavedItineraries());
-      } catch (error) {
-        console.error('Failed to delete itinerary:', error);
-        setDeleteError(error instanceof Error ? error.message : 'Failed to delete itinerary.');
-      } finally {
-        setDeletingId(null);
+    setDeleteError(null);
+    setDeletingId(id);
+    try {
+      const deleted = await deleteRemoteItinerary(id);
+      if (!deleted) {
+        setDeleteError('Please sign in again to delete server itineraries.');
+        return;
       }
+      const refreshed = await fetchItineraries();
+      setSavedItineraries(refreshed);
+      const stillExists = refreshed.some((item) => item.id === id);
+      if (stillExists) {
+        setDeleteError('Delete request completed but itinerary still exists on server.');
+        return;
+      }
+      onDeleteItinerarySuccess?.(id);
+    } catch (error) {
+      console.error('Failed to delete itinerary:', error);
+      setDeleteError(error instanceof Error ? error.message : 'Failed to delete itinerary.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -107,7 +103,7 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
 
       {status === 'error' && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          We couldn&apos;t load itineraries from the server. Showing local data instead.
+          We couldn&apos;t load itineraries from the server. Please try again.
         </div>
       )}
 
@@ -202,7 +198,7 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
                   <Button 
                     variant="outline"
                     size="icon"
-                    onClick={() => void handleDelete(itinerary.id)}
+                    onClick={() => setPendingDeleteId(itinerary.id)}
                     disabled={deletingId === itinerary.id}
                     title={deletingId === itinerary.id ? 'Deleting itinerary...' : 'Delete itinerary'}
                   >
@@ -214,6 +210,39 @@ export function SavedItinerariesView({ onViewItinerary, onBackToWelcome }: Saved
           ))}
         </div>
       )}
+
+      <Dialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            setPendingDeleteId(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete itinerary?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this itinerary?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingDeleteId(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (!pendingDeleteId) return;
+                void handleDelete(pendingDeleteId);
+                setPendingDeleteId(null);
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

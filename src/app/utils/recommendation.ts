@@ -1,14 +1,4 @@
 import { Destination, UserPreferences } from '@/app/types/destination';
-import { 
-  hybridCollaborativeFiltering, 
-  calculatePopularityScore 
-} from '@/app/utils/collaborativeFiltering';
-import { 
-  knapsackOptimization, 
-  multiConstraintKnapsack,
-  fractionalKnapsackRanking,
-  KnapsackItem 
-} from '@/app/utils/knapsack';
 
 /**
  * Content-based filtering: Calculate similarity score between user preferences and destination
@@ -98,115 +88,6 @@ export function calculateContentScore(destination: Destination, preferences: Use
   }
   
   return Math.max(0, score);
-}
-
-/**
- * Enhanced hybrid recommendation system
- * Combines content-based filtering, collaborative filtering, and knapsack optimization
- */
-export function getRecommendations(
-  allDestinations: Destination[],
-  preferences: UserPreferences,
-  limit: number = 6
-): Destination[] {
-  const desiredMinItems = Math.max(3, Math.floor(preferences.duration));
-  const desiredMaxItems = Math.max(limit, desiredMinItems);
-  const safeLimit = Math.min(desiredMaxItems, allDestinations.length);
-  // Step 1: Calculate content-based scores
-  const contentScores = new Map<string, number>();
-  allDestinations.forEach(dest => {
-    const score = calculateContentScore(dest, preferences);
-    contentScores.set(dest.id, score);
-  });
-  
-  // Step 2: Get collaborative filtering scores
-  const cfScores = hybridCollaborativeFiltering(preferences, allDestinations);
-  
-  // Step 3: Calculate popularity scores
-  const popularityScores = new Map<string, number>();
-  allDestinations.forEach(dest => {
-    const popScore = calculatePopularityScore(dest.id);
-    popularityScores.set(dest.id, popScore);
-  });
-  
-  // Step 4: Combine all scores with weighted approach
-  const hybridScores = new Map<string, number>();
-  const contentWeight = 0.5;  // Content-based filtering
-  const cfWeight = 0.35;       // Collaborative filtering
-  const popularityWeight = 0.15; // Popularity
-  
-  allDestinations.forEach(dest => {
-    const contentScore = contentScores.get(dest.id) || 0;
-    const cfScore = cfScores.get(dest.id) || 0;
-    const popScore = popularityScores.get(dest.id) || 0;
-    
-    // Normalize scores to 0-100 scale
-    const normalizedContent = Math.min(100, contentScore);
-    const normalizedCF = Math.min(100, cfScore * 5); // CF scores are typically lower
-    const normalizedPop = Math.min(100, popScore * 20);
-    
-    const finalScore = 
-      (normalizedContent * contentWeight) +
-      (normalizedCF * cfWeight) +
-      (normalizedPop * popularityWeight);
-    
-    hybridScores.set(dest.id, finalScore);
-  });
-  
-  // Step 5: Create knapsack items with hybrid scores
-  const costScale = 100;
-  const knapsackItems: KnapsackItem[] = allDestinations.map(dest => ({
-    destination: dest,
-    value: hybridScores.get(dest.id) || 0,
-    weight: Math.max(1, Math.ceil(dest.estimatedCost / costScale)),
-    durationWeight: Math.max(1, Math.ceil(dest.duration))
-  }));
-  
-  // Step 6: Apply knapsack optimization with constraints
-  const totalBudget = preferences.budget * Math.min(limit * 1.5, 10); // Total budget for all activities
-  const totalDuration = preferences.duration * 8; // 8 hours per day
-  const cappedBudget = Math.min(totalBudget, 50000);
-  const scaledBudget = Math.max(1, Math.floor(cappedBudget / costScale));
-  
-  const optimizedDestinations = multiConstraintKnapsack(
-    knapsackItems,
-    {
-      maxBudget: scaledBudget,
-      maxDuration: totalDuration,
-      minItems: Math.min(desiredMinItems, safeLimit),
-      maxItems: safeLimit
-    },
-    0.3 // Diversity weight
-  );
-  
-  // Step 7: If knapsack returned fewer items than desired, fill with top-ranked items
-  if (optimizedDestinations.length < safeLimit) {
-    const ranked = fractionalKnapsackRanking(knapsackItems);
-    const remainingSlots = safeLimit - optimizedDestinations.length;
-    
-    let added = 0;
-    for (const item of ranked) {
-      if (added >= remainingSlots) break;
-      // Check for duplicates before adding
-      if (!optimizedDestinations.some(d => d.id === item.destination.id)) {
-        optimizedDestinations.push(item.destination);
-        added++;
-      }
-    }
-  }
-  
-  // Step 8: Final ranking by hybrid score - remove any potential duplicates
-  const uniqueDestinations = Array.from(
-    new Map(optimizedDestinations.map(d => [d.id, d])).values()
-  );
-  
-  const finalRanked = uniqueDestinations.sort((a, b) => {
-    const scoreA = hybridScores.get(a.id) || 0;
-    const scoreB = hybridScores.get(b.id) || 0;
-    return scoreB - scoreA;
-  });
-  
-  return finalRanked.slice(0, safeLimit);
 }
 
 /**
@@ -300,9 +181,8 @@ export function getRecommendationScores(
   };
 } {
   const contentScore = calculateContentScore(destination, preferences);
-  const cfScores = hybridCollaborativeFiltering(preferences, [destination]);
-  const cfScore = cfScores.get(destination.id) || 0;
-  const popularityScore = calculatePopularityScore(destination.id);
+  const cfScore = 0;
+  const popularityScore = 0;
   
   // Calculate breakdown
   const breakdown = {

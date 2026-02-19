@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Destination } from '@/app/types/destination';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
@@ -17,7 +17,6 @@ import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { Calendar, Clock, Trash2, Download, Share2, Save, Plus, Wallet } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
-import { saveItinerary } from '@/app/utils/storage';
 import { createItinerary } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
 
@@ -27,7 +26,7 @@ interface ItineraryViewProps {
   userInterests?: string[];
   onRemoveDestination: (destinationId: string) => void;
   onReset: () => void;
-  onSaveSuccess?: () => void;
+  onSaveSuccess?: (savedItinerary: SavedItinerary) => void;
   allDestinations?: Destination[];
   onAddDestination?: (destination: Destination) => void;
 }
@@ -48,6 +47,7 @@ export function ItineraryView({
   const [saveNameDraft, setSaveNameDraft] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
+  const saveRequestInFlight = useRef(false);
   const getDuration = (value: number) => (Number.isFinite(value) ? value : 0);
   const schedule = calculateItinerarySchedule(destinations, tripDays, userInterests);
   const emptyDays = Array.from(schedule.entries()).filter(([, dayDestinations]) => dayDestinations.length === 0).length;
@@ -63,16 +63,18 @@ export function ItineraryView({
   };
 
   const handleSave = async () => {
+    if (saveRequestInFlight.current) return;
     const itineraryName = saveNameDraft.trim();
     if (!itineraryName) {
       setSaveError('Please enter an itinerary name.');
       return;
     }
 
+    saveRequestInFlight.current = true;
     setIsSaving(true);
     setSaveError(null);
     try {
-      const newItinerary: SavedItinerary = {
+      const newItinerary = {
         id: `itinerary_${Date.now()}`,
         name: itineraryName,
         destinations,
@@ -80,25 +82,23 @@ export function ItineraryView({
         createdAt: new Date().toISOString(),
         totalCost,
         totalDuration
-      };
-      
-      saveItinerary(newItinerary);
+      } as SavedItinerary;
 
-      // Best-effort sync to backend for admin visibility.
-      try {
-        await createItinerary(newItinerary);
-      } catch (syncError) {
-        console.warn('Failed to sync itinerary to server:', syncError);
+      const created = await createItinerary(newItinerary);
+      if (!created) {
+        setSaveError('Please sign in to save itineraries.');
+        return;
       }
 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
       setIsSaveDialogOpen(false);
-      onSaveSuccess?.();
+      onSaveSuccess?.(created);
     } catch (error) {
       setSaveError('Failed to save itinerary. Please try again.');
     } finally {
       setIsSaving(false);
+      saveRequestInFlight.current = false;
     }
   };
 

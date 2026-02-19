@@ -8,7 +8,7 @@ import { UserPreferences } from '@/app/types/destination';
 import { Mountain, Waves, Heart, Compass, ChevronDown, ChevronUp, Sun, LucideBook, Ship, Camera } from 'lucide-react';
 
 interface PreferenceFormProps {
-  onSubmit: (preferences: UserPreferences) => void;
+  onSubmit: (preferences: UserPreferences) => void | Promise<void>;
 }
 
 // Define sub-interests for each main interest
@@ -74,6 +74,7 @@ const interestOptionsWithSubs = [
     icon: Camera,
     subInterests: [
       'Heritage Tours',
+      'Food tourism',
       'Culinary Tourism',
       'Festivals & events'
     ]
@@ -203,7 +204,7 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
 
@@ -225,7 +226,7 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
     }
     
     try {
-      onSubmit({
+      await onSubmit({
         interests,
         activityLevel,
         budget: budgetNum,
@@ -234,7 +235,8 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
       });
     } catch (error) {
       console.error('Failed to submit preferences:', error);
-      setSubmitError('We could not generate your itinerary. Please try again.');
+      setSubmitError(error instanceof Error ? error.message : 'We could not generate your itinerary. Please try again.');
+    } finally {
       setIsSubmitting(false);
     }
   };

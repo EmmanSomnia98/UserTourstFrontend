@@ -5,11 +5,11 @@ import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Separator } from '@/app/components/ui/separator';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { Calendar, Clock, Trash2, Plus, Save, X, Edit2, Wallet } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
-import { updateItineraryName, deleteItinerary, saveItinerary } from '@/app/utils/storage';
+import { createItinerary, deleteRemoteItinerary } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
 
 interface EditableItineraryViewProps {
@@ -17,9 +17,18 @@ interface EditableItineraryViewProps {
   allDestinations: Destination[];
   onBack: () => void;
   onUpdate: () => void;
+  onSaveChangesSuccess?: (savedItinerary: SavedItinerary) => void;
+  onDeleteSuccess?: (itineraryId: string) => void;
 }
 
-export function EditableItineraryView({ savedItinerary, allDestinations, onBack, onUpdate }: EditableItineraryViewProps) {
+export function EditableItineraryView({
+  savedItinerary,
+  allDestinations,
+  onBack,
+  onUpdate,
+  onSaveChangesSuccess,
+  onDeleteSuccess
+}: EditableItineraryViewProps) {
   const [destinations, setDestinations] = useState<Destination[]>(savedItinerary.destinations);
   const [tripDays, setTripDays] = useState(savedItinerary.tripDays);
   const [isEditingName, setIsEditingName] = useState(false);
@@ -27,6 +36,9 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
   const [showAddDestinations, setShowAddDestinations] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const getDuration = (value: number) => (Number.isFinite(value) ? value : 0);
 
   const schedule = calculateItinerarySchedule(destinations, tripDays);
@@ -52,34 +64,63 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
 
   const handleSaveName = () => {
     if (itineraryName.trim()) {
-      updateItineraryName(savedItinerary.id, itineraryName);
       setIsEditingName(false);
-      onUpdate();
+      setHasChanges(true);
     }
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
+    setSaveError(null);
+    setIsSaving(true);
     // Delete old version and save new version
-    deleteItinerary(savedItinerary.id);
-    
-    const updatedItinerary: SavedItinerary = {
-      ...savedItinerary,
-      name: itineraryName,
-      destinations,
-      tripDays,
-      totalCost,
-      totalDuration,
-    };
-    
-    saveItinerary(updatedItinerary);
-    setHasChanges(false);
-    onUpdate();
+    try {
+      const removed = await deleteRemoteItinerary(savedItinerary.id);
+      if (!removed) {
+        setSaveError('Please sign in again to update this itinerary.');
+        return;
+      }
+
+      const updatedItinerary: SavedItinerary = {
+        ...savedItinerary,
+        name: itineraryName.trim() || savedItinerary.name,
+        destinations,
+        tripDays,
+        totalCost,
+        totalDuration,
+      };
+
+      const created = await createItinerary(updatedItinerary);
+      if (!created) {
+        setSaveError('Please sign in again to update this itinerary.');
+        return;
+      }
+
+      setHasChanges(false);
+      onSaveChangesSuccess?.(created);
+      onUpdate();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Failed to save changes.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleDelete = () => {
-    if (confirm('Are you sure you want to delete this itinerary?')) {
-      deleteItinerary(savedItinerary.id);
+  const handleDelete = async () => {
+    setSaveError(null);
+    setIsSaving(true);
+    try {
+      const deleted = await deleteRemoteItinerary(savedItinerary.id);
+      if (!deleted) {
+        setSaveError('Please sign in again to delete this itinerary.');
+        return;
+      }
+      onDeleteSuccess?.(savedItinerary.id);
+      setIsDeleteDialogOpen(false);
       onBack();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Failed to delete itinerary.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -138,12 +179,12 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
             </div>
             <div className="flex flex-wrap gap-2">
               {hasChanges && (
-                <Button onClick={handleSaveChanges}>
+                <Button onClick={() => void handleSaveChanges()} disabled={isSaving}>
                   <Save className="w-4 h-4 mr-2" />
-                  Save Changes
+                  {isSaving ? 'Saving...' : 'Save Changes'}
                 </Button>
               )}
-              <Button variant="outline" onClick={handleDelete}>
+              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(true)}>
                 <Trash2 className="w-4 h-4 mr-2 text-red-500" />
                 Delete
               </Button>
@@ -339,7 +380,34 @@ export function EditableItineraryView({ savedItinerary, allDestinations, onBack,
             Back to My Itineraries
           </Button>
         </div>
+        {saveError && (
+          <div className="mt-4 text-sm text-red-600">
+            {saveError}
+          </div>
+        )}
       </Card>
+
+      <Dialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete itinerary?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this itinerary?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void handleDelete()} disabled={isSaving}>
+              {isSaving ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={selectedDestination !== null}
