@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Destination } from '@/app/types/destination';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
@@ -24,22 +24,22 @@ interface ItineraryViewProps {
   destinations: Destination[];
   tripDays: number;
   userInterests?: string[];
+  interestRanks?: Record<string, number>;
   onRemoveDestination: (destinationId: string) => void;
   onReset: () => void;
+  onViewSavedItineraries?: () => void;
   onSaveSuccess?: (savedItinerary: SavedItinerary) => void;
-  allDestinations?: Destination[];
-  onAddDestination?: (destination: Destination) => void;
 }
 
 export function ItineraryView({
   destinations,
   tripDays,
   userInterests = [],
+  interestRanks,
   onRemoveDestination,
   onReset,
-  onSaveSuccess,
-  allDestinations,
-  onAddDestination
+  onViewSavedItineraries,
+  onSaveSuccess
 }: ItineraryViewProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -47,13 +47,52 @@ export function ItineraryView({
   const [saveNameDraft, setSaveNameDraft] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
+  const [finishedDestinationIds, setFinishedDestinationIds] = useState<Set<string>>(new Set());
   const saveRequestInFlight = useRef(false);
   const getDuration = (value: number) => (Number.isFinite(value) ? value : 0);
-  const schedule = calculateItinerarySchedule(destinations, tripDays, userInterests);
+  const schedule = calculateItinerarySchedule(destinations, tripDays, userInterests, interestRanks);
   const emptyDays = Array.from(schedule.entries()).filter(([, dayDestinations]) => dayDestinations.length === 0).length;
   
   const totalCost = destinations.reduce((sum, dest) => sum + dest.estimatedCost, 0);
   const totalDuration = destinations.reduce((sum, dest) => sum + getDuration(dest.duration), 0);
+  const isItineraryFinished =
+    destinations.length > 0 &&
+    destinations.every((destination) => finishedDestinationIds.has(destination.id));
+
+  useEffect(() => {
+    const validIds = new Set(destinations.map((dest) => dest.id));
+    setFinishedDestinationIds((prev) => {
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (validIds.has(id)) {
+          next.add(id);
+        }
+      });
+      return next.size === prev.size ? prev : next;
+    });
+  }, [destinations]);
+
+  const toggleFinished = (destinationId: string) => {
+    setFinishedDestinationIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(destinationId)) {
+        next.delete(destinationId);
+      } else {
+        next.add(destinationId);
+      }
+      return next;
+    });
+  };
+
+  const handleRemoveClick = (destinationId: string) => {
+    setFinishedDestinationIds((prev) => {
+      if (!prev.has(destinationId)) return prev;
+      const next = new Set(prev);
+      next.delete(destinationId);
+      return next;
+    });
+    onRemoveDestination(destinationId);
+  };
 
   const openSaveDialog = () => {
     const defaultName = `Bulusan Trip ${new Date().toLocaleDateString()}`;
@@ -193,7 +232,7 @@ export function ItineraryView({
               </div>
             </div>
 
-            <div className="space-y-3 sm:ml-6 sm:border-l-2 sm:border-gray-200 sm:pl-6">
+            <div className="space-y-3 sm:ml-6 sm:pl-6">
               {dayDestinations.length === 0 && (
                 <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
                   No activities scheduled for this day yet.
@@ -201,10 +240,28 @@ export function ItineraryView({
               )}
               {dayDestinations.map((dest, index) => (
                 <div key={dest.id ?? `${dest.name}-${day}-${index}`} className="relative">
-                  <div className="hidden sm:block absolute -left-8 top-4 w-4 h-4 bg-white border-2 border-blue-500 rounded-full"></div>
+                  {(() => {
+                    const isFinished = finishedDestinationIds.has(dest.id);
+                    return (
+                      <>
+                        <div
+                          className={`hidden sm:block absolute -left-8 w-4 h-4 rounded-full transition-all duration-300 ${
+                            isFinished
+                              ? 'bottom-0 bg-white border-2 border-blue-500'
+                              : 'top-0 bg-white border-2 border-blue-500'
+                          }`}
+                        />
+                        <div
+                          className="hidden sm:block absolute left-[-1.5rem] -translate-x-1/2 top-0 h-full w-[2px] bg-gray-200"
+                        />
+                      </>
+                    );
+                  })()}
                   
                   <Card
-                    className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+                    className={`p-4 cursor-pointer hover:shadow-md transition-shadow ${
+                      finishedDestinationIds.has(dest.id) ? 'border-emerald-200 bg-emerald-50/30' : ''
+                    }`}
                     role="button"
                     tabIndex={0}
                     onClick={() => setSelectedDestination(dest)}
@@ -249,13 +306,24 @@ export function ItineraryView({
                         </div>
                       </div>
 
-                      <div className="flex justify-end sm:block pt-1 sm:pt-0">
+                      <div className="flex justify-end gap-2 sm:block pt-1 sm:pt-0">
+                        <Button
+                          variant={finishedDestinationIds.has(dest.id) ? 'secondary' : 'outline'}
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleFinished(dest.id);
+                          }}
+                          className="flex-shrink-0"
+                        >
+                          {finishedDestinationIds.has(dest.id) ? 'Finished' : 'Finish'}
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={(event) => {
                             event.stopPropagation();
-                            onRemoveDestination(dest.id);
+                            handleRemoveClick(dest.id);
                           }}
                           className="flex-shrink-0"
                         >
@@ -281,6 +349,11 @@ export function ItineraryView({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {onViewSavedItineraries && (
+              <Button variant="outline" onClick={onViewSavedItineraries}>
+                View My Itineraries
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={openSaveDialog}
@@ -297,6 +370,11 @@ export function ItineraryView({
         {saveSuccess && (
           <div className="mt-4 text-sm text-green-500">
             Itinerary saved successfully!
+          </div>
+        )}
+        {isItineraryFinished && (
+          <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            Great job! You have finished all destinations in this itinerary.
           </div>
         )}
       </Card>

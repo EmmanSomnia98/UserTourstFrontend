@@ -117,6 +117,7 @@ const interestOptionsWithSubs = [
 export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
   const [planningMode, setPlanningMode] = useState<'preferences' | 'budget'>('preferences');
   const [interests, setInterests] = useState<string[]>([]);
+  const [mainInterestOrder, setMainInterestOrder] = useState<string[]>([]);
   const [expandedInterests, setExpandedInterests] = useState<string[]>([]);
   const [activityLevel, setActivityLevel] = useState<'relaxed' | 'moderate' | 'active'>('moderate');
   const [budget, setBudget] = useState<string>('1000');
@@ -136,6 +137,8 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
     ? 0
     : (collaboratorLimit === 1 ? 1 : Math.max(1, completedCollaborators.length + 1));
 
+  const mainInterestIds = interestOptionsWithSubs.map((option) => option.id);
+
   const toggleInterest = (interest: string) => {
     const isCurrentlySelected = interests.includes(interest);
     
@@ -144,10 +147,12 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
       const interestOption = interestOptionsWithSubs.find(opt => opt.id === interest);
       const subInterestsToRemove = interestOption?.subInterests || [];
       setInterests(prev => prev.filter(i => i !== interest && !subInterestsToRemove.includes(i)));
+      setMainInterestOrder(prev => prev.filter(id => id !== interest));
       setExpandedInterests(prev => prev.filter(i => i !== interest));
     } else {
       // Add main interest and expand to show sub-interests
       setInterests(prev => [...prev, interest]);
+      setMainInterestOrder(prev => (prev.includes(interest) ? prev : [...prev, interest]));
       setExpandedInterests(prev => [...prev, interest]);
       setShowInterestError(false);
     }
@@ -160,6 +165,7 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
       } else {
         // Make sure main interest is also selected
         if (!prev.includes(mainInterest)) {
+          setMainInterestOrder(order => (order.includes(mainInterest) ? order : [...order, mainInterest]));
           setShowInterestError(false);
           return [...prev, mainInterest, subInterest];
         }
@@ -226,8 +232,18 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
     }
     
     try {
+      const autoRankedMainInterests = mainInterestOrder
+        .filter((interestId) => mainInterestIds.includes(interestId) && interests.includes(interestId))
+        .slice(0, 9);
+
+      const interestRanks = autoRankedMainInterests.reduce<Record<string, number>>((acc, interestId, index) => {
+        acc[interestId] = index + 1;
+        return acc;
+      }, {});
+
       await onSubmit({
         interests,
+        ...(Object.keys(interestRanks).length > 0 ? { interestRanks } : {}),
         activityLevel,
         budget: budgetNum,
         duration: durationNum,
@@ -363,40 +379,49 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
               const Icon = option.icon;
               const isSelected = interests.includes(option.id);
               const isExpanded = expandedInterests.includes(option.id);
+              const rankIndex = mainInterestOrder.findIndex((interestId) => interestId === option.id);
+              const mainInterestRank = rankIndex >= 0 ? rankIndex + 1 : null;
               
               return (
                 <div key={option.id} className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleInterest(option.id)}
-                    className={`w-full flex items-center justify-between gap-3 p-4 rounded-lg border-2 transition-all ${
-                      isSelected
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Icon className={`w-6 h-6 ${isSelected ? 'text-blue-500' : 'text-gray-600'}`} />
-                      <span className={`text-sm ${isSelected ? 'font-medium' : ''}`}>
-                        {option.label}
-                      </span>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleInterest(option.id)}
+                      className={`flex-1 flex items-center justify-between gap-3 p-4 rounded-lg border-2 transition-all ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon className={`w-6 h-6 ${isSelected ? 'text-blue-500' : 'text-gray-600'}`} />
+                        <span className={`text-sm ${isSelected ? 'font-medium' : ''}`}>
+                          {option.label}
+                        </span>
+                      </div>
+                      {isSelected && (
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleExpanded(option.id);
+                          }}
+                          className="p-1 hover:bg-blue-100 rounded cursor-pointer"
+                        >
+                          {isExpanded ? (
+                            <ChevronUp className="w-4 h-4 text-blue-500" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-blue-500" />
+                          )}
+                        </div>
+                      )}
+                    </button>
                     {isSelected && (
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleExpanded(option.id);
-                        }}
-                        className="p-1 hover:bg-blue-100 rounded cursor-pointer"
-                      >
-                        {isExpanded ? (
-                          <ChevronUp className="w-4 h-4 text-blue-500" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4 text-blue-500" />
-                        )}
+                      <div className="w-20 h-9 rounded-md bg-gray-100 text-gray-700 text-xs font-medium flex items-center justify-center">
+                        {mainInterestRank ? `#${mainInterestRank}` : ''}
                       </div>
                     )}
-                  </button>
+                  </div>
                   
                   {/* Sub-interests */}
                   {isSelected && isExpanded && (

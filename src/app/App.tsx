@@ -145,12 +145,36 @@ export default function App() {
     prefs: UserPreferences,
     serverScores?: Map<string, number>
   ) => {
-    setRecommendations(recommended);
-    setItinerary(recommended);
+    const uniqueRecommended: Destination[] = [];
+    const seenIds = new Set<string>();
+    recommended.forEach((destination) => {
+      if (seenIds.has(destination.id)) return;
+      seenIds.add(destination.id);
+      uniqueRecommended.push(destination);
+    });
+
+    // Keep AI-ranked items first, then backfill from admin destinations using local scoring
+    // so short server responses don't leave days empty.
+    const targetCount = Math.min(
+      allDestinations.length,
+      Math.max(prefs.duration, uniqueRecommended.length)
+    );
+    const backfill = [...allDestinations]
+      .filter((destination) => !seenIds.has(destination.id))
+      .sort((a, b) => calculateContentScore(b, prefs) - calculateContentScore(a, prefs));
+
+    const itinerarySeed = [...uniqueRecommended];
+    for (const candidate of backfill) {
+      if (itinerarySeed.length >= targetCount) break;
+      itinerarySeed.push(candidate);
+    }
+
+    setRecommendations(uniqueRecommended);
+    setItinerary(itinerarySeed);
     if (serverScores && serverScores.size > 0) {
       setRecommendationScores(normalizeScores(serverScores));
     } else {
-      setRecommendationScores(calculateDisplayScores(recommended, prefs));
+      setRecommendationScores(calculateDisplayScores(uniqueRecommended, prefs));
     }
     setCurrentView('itinerary');
   };
@@ -764,11 +788,11 @@ export default function App() {
             destinations={itinerary}
             tripDays={preferences.duration}
             userInterests={preferences.interests}
+            interestRanks={preferences.interestRanks}
             onRemoveDestination={handleRemoveFromItinerary}
             onReset={handleReset}
+            onViewSavedItineraries={() => setCurrentView('saved-itineraries')}
             onSaveSuccess={handleItinerarySaved}
-            allDestinations={allDestinations}
-            onAddDestination={handleAddToItinerary}
           />
         )}
 
@@ -820,5 +844,3 @@ export default function App() {
     </div>
   );
 }
-
-

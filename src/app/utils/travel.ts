@@ -1,9 +1,11 @@
+import { apiPost } from '@/app/api/client';
+
 export type GeoPoint = {
   lat: number;
   lng: number;
 };
 
-export type TravelProfile = 'foot-walking' | 'cycling-regular' | 'driving-car';
+export type TravelProfile = 'walking' | 'cycling' | 'driving';
 
 export type TravelEstimate = {
   distanceKm: number;
@@ -47,46 +49,49 @@ export function estimateMinutes(distanceKm: number, speedKmH: number): number {
   return Math.max(1, Math.round(hours * 60));
 }
 
-export async function fetchOrsEstimate(
+type RoutingEstimatePayload = {
+  distanceKm?: number | string;
+  durationMin?: number | string;
+  distanceMeters?: number | string;
+  durationSeconds?: number | string;
+  distance?: number | string;
+  duration?: number | string;
+};
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+export async function fetchRoutingEstimate(
   origin: GeoPoint,
   destination: GeoPoint,
   profile: TravelProfile
 ): Promise<TravelEstimate> {
-  const apiKey = import.meta.env.VITE_ORS_API_KEY as string | undefined;
-  if (!apiKey) {
-    throw new Error('Missing VITE_ORS_API_KEY');
-  }
-
-  const response = await fetch(`https://api.openrouteservice.org/v2/directions/${profile}`, {
-    method: 'POST',
-    headers: {
-      Authorization: apiKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      coordinates: [
-        [origin.lng, origin.lat],
-        [destination.lng, destination.lat],
-      ],
-    }),
+  const payload = await apiPost<RoutingEstimatePayload>('/api/routing/estimate', {
+    origin,
+    destination,
+    profile,
   });
 
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`ORS error: ${response.status} ${message}`);
+  const distanceKm = toNumber(payload.distanceKm);
+  const durationMin = toNumber(payload.durationMin);
+  const distanceMeters = toNumber(payload.distanceMeters) ?? toNumber(payload.distance);
+  const durationSeconds = toNumber(payload.durationSeconds) ?? toNumber(payload.duration);
+
+  if (distanceKm === null && distanceMeters === null) {
+    throw new Error('Routing API error: missing distance');
+  }
+  if (durationMin === null && durationSeconds === null) {
+    throw new Error('Routing API error: missing duration');
   }
 
-  const data = (await response.json()) as {
-    features?: Array<{
-      properties?: { summary?: { distance?: number; duration?: number } };
-    }>;
-  };
-  const summary = data.features?.[0]?.properties?.summary;
-  const distanceMeters = summary?.distance ?? 0;
-  const durationSeconds = summary?.duration ?? 0;
-
   return {
-    distanceKm: distanceMeters / 1000,
-    durationMin: Math.max(1, Math.round(durationSeconds / 60)),
+    distanceKm: distanceKm ?? (distanceMeters as number) / 1000,
+    durationMin: Math.max(1, Math.round(durationMin ?? (durationSeconds as number) / 60)),
   };
 }

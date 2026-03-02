@@ -19,6 +19,7 @@ export interface Destination {
 
 export interface UserPreferences {
   interests: string[];
+  interestRanks?: Record<string, number>;
   activityLevel: 'relaxed' | 'moderate' | 'active';
   budget: number; // Changed from 'low' | 'medium' | 'high' to number
   duration: number; // days

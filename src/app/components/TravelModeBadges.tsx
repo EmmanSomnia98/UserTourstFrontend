@@ -4,7 +4,7 @@ import { Destination } from '@/app/types/destination';
 import {
   DEFAULT_ORIGIN,
   estimateMinutes,
-  fetchOrsEstimate,
+  fetchRoutingEstimate,
   formatDistanceKm,
   haversineKm,
   TravelEstimate,
@@ -26,7 +26,7 @@ const inFlight = new Map<string, Promise<TravelEstimate>>();
 const failedAt = new Map<string, number>();
 const FAILURE_RETRY_MS = 5 * 60 * 1000;
 const GLOBAL_DISABLE_MS = 2 * 60 * 1000;
-let orsDisabledUntil = 0;
+let routingDisabledUntil = 0;
 
 function isValidCoordinate(value: number, min: number, max: number): boolean {
   return Number.isFinite(value) && value >= min && value <= max;
@@ -38,13 +38,13 @@ function hasValidLocation(destination: Destination): boolean {
   return isValidCoordinate(lat, -90, 90) && isValidCoordinate(lng, -180, 180);
 }
 
-function isOrsUnavailable(error: unknown): boolean {
+function isRoutingProviderUnavailable(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '');
-  return message.includes('ORS error: 5');
+  return message.includes('Request failed (5') || message.includes('Routing API error:');
 }
 
 export function TravelModeBadges({ destination }: TravelModeBadgesProps) {
-  const canUseOrs = import.meta.env.VITE_ENABLE_ORS === 'true' && Boolean(import.meta.env.VITE_ORS_API_KEY);
+  const canUseRoutingApi = import.meta.env.VITE_ENABLE_ROUTING_API !== 'false';
   const hasLocation = hasValidLocation(destination);
 
   const distanceKmFallback = hasLocation ? haversineKm(DEFAULT_ORIGIN, destination.location) : 0;
@@ -66,7 +66,7 @@ export function TravelModeBadges({ destination }: TravelModeBadgesProps) {
     profile: TravelProfile,
     setter: (state: ModeState) => void
   ) => {
-    if (!canUseOrs || !hasLocation || Date.now() < orsDisabledUntil) {
+    if (!canUseRoutingApi || !hasLocation || Date.now() < routingDisabledUntil) {
       setter({ loading: false });
       return;
     }
@@ -95,7 +95,7 @@ export function TravelModeBadges({ destination }: TravelModeBadgesProps) {
       return;
     }
 
-    const request = fetchOrsEstimate(DEFAULT_ORIGIN, destination.location, profile);
+    const request = fetchRoutingEstimate(DEFAULT_ORIGIN, destination.location, profile);
     inFlight.set(key, request);
     try {
       const estimate = await request;
@@ -103,8 +103,8 @@ export function TravelModeBadges({ destination }: TravelModeBadgesProps) {
       setter({ loading: false, estimate });
     } catch (error) {
       failedAt.set(key, Date.now());
-      if (isOrsUnavailable(error)) {
-        orsDisabledUntil = Date.now() + GLOBAL_DISABLE_MS;
+      if (isRoutingProviderUnavailable(error)) {
+        routingDisabledUntil = Date.now() + GLOBAL_DISABLE_MS;
       }
       setter({ loading: false, error: (error as Error).message });
     } finally {
@@ -124,10 +124,10 @@ export function TravelModeBadges({ destination }: TravelModeBadgesProps) {
     setBike({ loading: true });
     setDrive({ loading: true });
 
-    void loadEstimate('foot-walking', setWalk);
-    void loadEstimate('cycling-regular', setBike);
-    void loadEstimate('driving-car', setDrive);
-  }, [destination.id, destination.name, destination.location?.lat, destination.location?.lng, canUseOrs, hasLocation]);
+    void loadEstimate('walking', setWalk);
+    void loadEstimate('cycling', setBike);
+    void loadEstimate('driving', setDrive);
+  }, [destination.id, destination.name, destination.location?.lat, destination.location?.lng, canUseRoutingApi, hasLocation]);
 
   const renderBadge = (
     icon: React.ReactNode,
