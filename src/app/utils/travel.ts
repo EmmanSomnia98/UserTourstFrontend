@@ -50,6 +50,9 @@ export function estimateMinutes(distanceKm: number, speedKmH: number): number {
 }
 
 type RoutingEstimatePayload = {
+  data?: RoutingEstimatePayload;
+  route?: RoutingEstimatePayload;
+  summary?: RoutingEstimatePayload;
   distanceKm?: number | string;
   durationMin?: number | string;
   distanceMeters?: number | string;
@@ -72,16 +75,61 @@ export async function fetchRoutingEstimate(
   destination: GeoPoint,
   profile: TravelProfile
 ): Promise<TravelEstimate> {
-  const payload = await apiPost<RoutingEstimatePayload>('/api/routing/estimate', {
-    origin,
-    destination,
-    profile,
-  });
+  const payloadCandidates = [
+    {
+      profile,
+      originLongitude: origin.lng,
+      originLatitude: origin.lat,
+      destinationLongitude: destination.lng,
+      destinationLatitude: destination.lat,
+    },
+    {
+      profile,
+      coordinates: [
+        [origin.lng, origin.lat],
+        [destination.lng, destination.lat],
+      ],
+    },
+    {
+      profile,
+      origin: {
+        longitude: origin.lng,
+        latitude: origin.lat,
+      },
+      destination: {
+        longitude: destination.lng,
+        latitude: destination.lat,
+      },
+    },
+  ];
 
-  const distanceKm = toNumber(payload.distanceKm);
-  const durationMin = toNumber(payload.durationMin);
-  const distanceMeters = toNumber(payload.distanceMeters) ?? toNumber(payload.distance);
-  const durationSeconds = toNumber(payload.durationSeconds) ?? toNumber(payload.duration);
+  let payload: RoutingEstimatePayload | null = null;
+  let lastError: unknown = null;
+  for (const candidate of payloadCandidates) {
+    try {
+      payload = await apiPost<RoutingEstimatePayload>('/api/routes/single', candidate);
+      break;
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error ?? '');
+      // Try alternate payload formats only for validation/client errors.
+      if (message.includes('Request failed (400)') || message.includes('Request failed (422)')) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (!payload) {
+    throw (lastError instanceof Error ? lastError : new Error('Routing API error: request failed'));
+  }
+
+  const source = payload.route ?? payload.summary ?? payload.data ?? payload;
+
+  const distanceKm = toNumber(source.distanceKm);
+  const durationMin = toNumber(source.durationMin);
+  const distanceMeters = toNumber(source.distanceMeters) ?? toNumber(source.distance);
+  const durationSeconds = toNumber(source.durationSeconds) ?? toNumber(source.duration);
 
   if (distanceKm === null && distanceMeters === null) {
     throw new Error('Routing API error: missing distance');

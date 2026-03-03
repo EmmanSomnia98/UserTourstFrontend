@@ -4,6 +4,7 @@ import { RecommendationBreakdown } from '@/app/components/RecommendationBreakdow
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
+import { GeoPoint } from '@/app/utils/travel';
 import { Sparkles, RefreshCw, Map } from 'lucide-react';
 import { useState } from 'react';
 
@@ -16,6 +17,7 @@ interface RecommendationsViewProps {
   onViewItinerary: () => void;
   onRestart: () => void;
   recommendationScores?: Map<string, number>;
+  userLocation?: GeoPoint | null;
 }
 
 export function RecommendationsView({
@@ -26,7 +28,8 @@ export function RecommendationsView({
   onAddToItinerary,
   onViewItinerary,
   onRestart,
-  recommendationScores
+  recommendationScores,
+  userLocation
 }: RecommendationsViewProps) {
   const otherDestinations = allDestinations.filter(
     dest => !recommendations.some(rec => rec.id === dest.id)
@@ -91,6 +94,7 @@ export function RecommendationsView({
               showRecommendationScore={true}
               recommendationScore={recommendationScores?.get(destination.id)}
               onShowBreakdown={() => setSelectedDestination(destination)}
+              userLocation={userLocation}
             />
           ))}
         </div>
@@ -111,6 +115,7 @@ export function RecommendationsView({
                 destination={destination}
                 onAddToItinerary={onAddToItinerary}
                 isInItinerary={itinerary.some(item => item.id === destination.id)}
+                userLocation={userLocation}
               />
             ))}
           </div>

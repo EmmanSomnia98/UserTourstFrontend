@@ -8,6 +8,7 @@ import { type AuthUser } from '@/app/api/auth';
 import { buildFeedbackEvent, flushFeedbackQueue, recordFeedbackEvent } from '@/app/api/feedback';
 import { useIsMobile } from '@/app/components/ui/use-mobile';
 import { calculateContentScore } from '@/app/utils/recommendation';
+import { GeoPoint } from '@/app/utils/travel';
 import { PreferenceForm } from '@/app/components/PreferenceForm';
 import { UserLogin } from '@/app/components/UserLogin';
 import { UserSignup } from '@/app/components/UserSignup';
@@ -55,6 +56,7 @@ export default function App() {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [logoutStep, setLogoutStep] = useState<'confirm' | 'thanks'>('confirm');
+  const [userLocation, setUserLocation] = useState<GeoPoint | null>(null);
   const heroDestinations = allDestinations.slice(0, 3);
   const showHeroGrid = heroDestinations.length === 3;
   const feedbackIdentity = {
@@ -766,7 +768,7 @@ export default function App() {
 
         {currentView === 'preferences' && (
           <div className="py-8">
-            <PreferenceForm onSubmit={handlePreferencesSubmit} />
+            <PreferenceForm onSubmit={handlePreferencesSubmit} onLocationChange={setUserLocation} />
           </div>
         )}
 
@@ -780,6 +782,7 @@ export default function App() {
             onViewItinerary={handleViewItinerary}
             onRestart={handleReset}
             recommendationScores={recommendationScores}
+            userLocation={userLocation}
           />
         )}
 
@@ -793,6 +796,7 @@ export default function App() {
             onReset={handleReset}
             onViewSavedItineraries={() => setCurrentView('saved-itineraries')}
             onSaveSuccess={handleItinerarySaved}
+            userLocation={userLocation}
           />
         )}
 

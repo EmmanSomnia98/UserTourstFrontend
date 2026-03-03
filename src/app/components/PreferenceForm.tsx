@@ -5,10 +5,12 @@ import { Checkbox } from '@/app/components/ui/checkbox';
 import { Label } from '@/app/components/ui/label';
 import { Input } from '@/app/components/ui/input';
 import { UserPreferences } from '@/app/types/destination';
-import { Mountain, Waves, Heart, Compass, ChevronDown, ChevronUp, Sun, LucideBook, Ship, Camera } from 'lucide-react';
+import { GeoPoint } from '@/app/utils/travel';
+import { Mountain, Waves, Heart, Compass, ChevronDown, ChevronUp, Sun, LucideBook, Ship, Camera, LocateFixed } from 'lucide-react';
 
 interface PreferenceFormProps {
   onSubmit: (preferences: UserPreferences) => void | Promise<void>;
+  onLocationChange?: (location: GeoPoint | null) => void;
 }
 
 // Define sub-interests for each main interest
@@ -114,7 +116,7 @@ const interestOptionsWithSubs = [
   }
 ];
 
-export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
+export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormProps) {
   const [planningMode, setPlanningMode] = useState<'preferences' | 'budget'>('preferences');
   const [interests, setInterests] = useState<string[]>([]);
   const [mainInterestOrder, setMainInterestOrder] = useState<string[]>([]);
@@ -127,6 +129,10 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
   const [showInterestError, setShowInterestError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [locationStatus, setLocationStatus] = useState<
+    'idle' | 'requesting' | 'granted' | 'denied' | 'unavailable' | 'error'
+  >('idle');
+  const [locationMessage, setLocationMessage] = useState<string>('');
   const preferenceBudgetFallback = 5000;
   const selectedTravelStyle = travelStyle[0] ?? 'solo';
   const collaboratorLimit = selectedTravelStyle === 'couple' ? 1
@@ -257,6 +263,44 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
     }
   };
 
+  const handleAllowLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationStatus('unavailable');
+      setLocationMessage('Location is not supported on this device/browser.');
+      onLocationChange?.(null);
+      return;
+    }
+
+    setLocationStatus('requesting');
+    setLocationMessage('Requesting location access...');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const nextLocation = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        onLocationChange?.(nextLocation);
+        setLocationStatus('granted');
+        setLocationMessage('Location access enabled. Travel times will use your current location.');
+      },
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) {
+          setLocationStatus('denied');
+          setLocationMessage('Location access was denied. You can enable it and try again.');
+          onLocationChange?.(null);
+          return;
+        }
+        setLocationStatus('error');
+        setLocationMessage('Could not get your location. Please try again.');
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 300000,
+      }
+    );
+  };
+
   return (
     <Card className="p-4 sm:p-8 max-w-4xl mx-auto">
       <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
@@ -297,6 +341,35 @@ export function PreferenceForm({ onSubmit }: PreferenceFormProps) {
                 We prioritize activities within your budget.
               </p>
             </button>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <Label className="text-lg">Location Access</Label>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <p className="text-sm text-slate-700">
+                  Allow location access for more accurate travel distance and time estimates.
+                </p>
+                {locationMessage && (
+                  <p className="text-xs text-slate-600">{locationMessage}</p>
+                )}
+              </div>
+              <Button
+                type="button"
+                variant={locationStatus === 'granted' ? 'outline' : 'default'}
+                onClick={handleAllowLocation}
+                disabled={locationStatus === 'requesting'}
+              >
+                <LocateFixed className="w-4 h-4 mr-2" />
+                {locationStatus === 'requesting'
+                  ? 'Requesting...'
+                  : locationStatus === 'granted'
+                    ? 'Refresh Location'
+                    : 'Allow Location'}
+              </Button>
+            </div>
           </div>
         </div>
         

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Destination } from '@/app/types/destination';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
-import { Badge } from '@/app/components/ui/badge';
 import { Separator } from '@/app/components/ui/separator';
 import { Input } from '@/app/components/ui/input';
 import {
@@ -14,6 +13,7 @@ import {
   DialogTitle,
 } from '@/app/components/ui/dialog';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
+import { GeoPoint } from '@/app/utils/travel';
 import { Calendar, Trash2, Download, Share2, Wallet } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
@@ -29,6 +29,7 @@ interface ItineraryViewProps {
   onReset: () => void;
   onViewSavedItineraries?: () => void;
   onSaveSuccess?: (savedItinerary: SavedItinerary) => void;
+  userLocation?: GeoPoint | null;
 }
 
 export function ItineraryView({
@@ -39,7 +40,8 @@ export function ItineraryView({
   onRemoveDestination,
   onReset,
   onViewSavedItineraries,
-  onSaveSuccess
+  onSaveSuccess,
+  userLocation
 }: ItineraryViewProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -285,15 +287,6 @@ export function ItineraryView({
                             <p className="text-sm text-gray-600 line-clamp-2">{dest.description}</p>
                           </div>
                           
-                          <div className="flex flex-wrap gap-2">
-                            <Badge variant="secondary" className="text-xs">
-                              {dest.type}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {dest.difficulty}
-                            </Badge>
-                          </div>
-
                           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 pt-1">
                             <div className="flex items-center gap-1">
                               <Wallet className="w-4 h-4" />
@@ -301,7 +294,7 @@ export function ItineraryView({
                             </div>
                           </div>
                           <div className="pt-1">
-                            <TravelModeBadges destination={dest} />
+                            <TravelModeBadges destination={dest} origin={userLocation} />
                           </div>
                         </div>
                       </div>
@@ -453,17 +446,13 @@ export function ItineraryView({
                   className="w-full h-56 sm:h-72 object-cover rounded-lg"
                 />
                 <p className="text-sm text-gray-700">{selectedDestination.description}</p>
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">{selectedDestination.type}</Badge>
-                  <Badge variant="outline">{selectedDestination.difficulty}</Badge>
-                </div>
                 <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                   <span className="inline-flex items-center gap-1">
                     <Wallet className="w-4 h-4" />
                     {formatPeso(selectedDestination.estimatedCost)}
                   </span>
                 </div>
-                <TravelModeBadges destination={selectedDestination} />
+                <TravelModeBadges destination={selectedDestination} origin={userLocation} />
               </div>
             </>
           )}

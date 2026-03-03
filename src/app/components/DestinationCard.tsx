@@ -4,6 +4,7 @@ import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { formatPeso } from '@/app/utils/currency';
+import { GeoPoint } from '@/app/utils/travel';
 import { Star, Clock, TrendingUp, MapPin, Plus, Check, Info } from 'lucide-react';
 
 interface DestinationCardProps {
@@ -13,6 +14,7 @@ interface DestinationCardProps {
   showRecommendationScore?: boolean;
   recommendationScore?: number;
   onShowBreakdown?: (destination: Destination) => void;
+  userLocation?: GeoPoint | null;
 }
 
 export function DestinationCard({
@@ -21,7 +23,8 @@ export function DestinationCard({
   isInItinerary = false,
   showRecommendationScore = false,
   recommendationScore,
-  onShowBreakdown
+  onShowBreakdown,
+  userLocation
 }: DestinationCardProps) {
   const difficultyColors = {
     easy: 'bg-green-100 text-green-800',
@@ -83,7 +86,7 @@ export function DestinationCard({
           </div>
         </div>
 
-        <TravelModeBadges destination={destination} />
+        <TravelModeBadges destination={destination} origin={userLocation} />
 
         <div className="flex flex-wrap gap-1">
           {destination.interests.slice(0, 3).map(interest => (

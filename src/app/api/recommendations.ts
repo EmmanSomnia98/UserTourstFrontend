@@ -1,8 +1,9 @@
 import { apiPost } from '@/app/api/client';
 import { Destination, UserPreferences } from '@/app/types/destination';
+import { calculateContentScore } from '@/app/utils/recommendation';
 
 const RECOMMENDATIONS_ENDPOINT =
-  (import.meta.env.VITE_RECOMMENDATIONS_ENDPOINT as string | undefined) ?? '/api/recommendations/itinerary';
+  (import.meta.env.VITE_RECOMMENDATIONS_ENDPOINT as string | undefined) ?? '/api/itineraries/generate';
 
 type RawDestination = Partial<Destination>;
 
@@ -21,6 +22,7 @@ type RecommendationsPayload =
       data?: RecommendationItem[];
       recommendations?: RecommendationItem[];
       items?: RecommendationItem[];
+      destinations?: RecommendationItem[];
       itinerary?: {
         destinations?: Array<{
           destination?: RawDestination | string;
@@ -73,8 +75,14 @@ function toNumber(value: unknown): number | null {
   return null;
 }
 
+function normalizeName(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+}
+
 function extractItems(payload: RecommendationsPayload): RecommendationItem[] {
   if (Array.isArray(payload)) return payload;
+  if ('destinations' in payload && Array.isArray(payload.destinations)) return payload.destinations;
   if ('recommendations' in payload && Array.isArray(payload.recommendations)) return payload.recommendations;
   if ('items' in payload && Array.isArray(payload.items)) return payload.items;
   if ('data' in payload && Array.isArray(payload.data)) return payload.data;
@@ -95,31 +103,72 @@ export async function fetchServerRecommendations(
   limit = 6,
   allDestinations: Destination[] = []
 ): Promise<ServerRecommendationsResult> {
-  const hasBudget = Number.isFinite(preferences.budget) && preferences.budget > 0;
-  const constrainedBody = {
-    budgetMode: 'constrained' as const,
-    // Backend expects a trip-level budget ceiling.
+  const requestBody = {
     maxBudget: Math.max(1, Math.round(preferences.budget * Math.max(1, preferences.duration))),
+    days: Math.max(1, Math.floor(preferences.duration)),
   };
-  const unconstrainedBody = {
+  const hasBudget = Number.isFinite(preferences.budget) && preferences.budget > 0;
+  const legacyConstrainedBody = {
+    budgetMode: 'constrained' as const,
+    maxBudget: requestBody.maxBudget,
+    days: requestBody.days,
+  };
+  const legacyUnconstrainedBody = {
     budgetMode: 'unconstrained' as const,
+    days: requestBody.days,
   };
-  let payload = await apiPost<RecommendationsPayload>(
-    RECOMMENDATIONS_ENDPOINT,
-    hasBudget ? constrainedBody : unconstrainedBody
-  );
 
-  let items = extractItems(payload);
+  const requestCandidates = [
+    requestBody,
+    hasBudget ? legacyConstrainedBody : legacyUnconstrainedBody,
+    { maxBudget: requestBody.maxBudget },
+    { maxBudget: requestBody.maxBudget, days: requestBody.days, budgetMode: hasBudget ? 'constrained' : 'unconstrained' },
+  ];
 
-  // Backend-only fallback: if constrained mode returns nothing, retry unconstrained.
-  if (items.length === 0 && hasBudget) {
-    payload = await apiPost<RecommendationsPayload>(RECOMMENDATIONS_ENDPOINT, unconstrainedBody);
-    items = extractItems(payload);
+  let payload: RecommendationsPayload | null = null;
+  let lastError: unknown = null;
+  for (const candidate of requestCandidates) {
+    try {
+      payload = await apiPost<RecommendationsPayload>(RECOMMENDATIONS_ENDPOINT, candidate);
+      break;
+    } catch (error) {
+      lastError = error;
+    }
   }
+
+  if (!payload) {
+    if (allDestinations.length > 0) {
+      console.warn('Recommendations API failed; falling back to local scoring.', lastError);
+      const fallbackScores = new Map<string, number>();
+      const fallbackDestinations = [...allDestinations]
+        .map((destination) => {
+          const score = calculateContentScore(destination, preferences);
+          fallbackScores.set(destination.id, score);
+          return { destination, score };
+        })
+        .sort((a, b) => b.score - a.score)
+        .slice(0, Math.max(1, Math.min(limit, allDestinations.length)))
+        .map((item) => item.destination);
+
+      return {
+        destinations: fallbackDestinations,
+        scores: fallbackScores,
+        metadata: {},
+      };
+    }
+    throw (lastError instanceof Error ? lastError : new Error('Failed to fetch recommendations'));
+  }
+
+  const items = extractItems(payload);
 
   const destinations: Destination[] = [];
   const scores = new Map<string, number>();
   const destinationById = new Map(allDestinations.map((item) => [item.id, item]));
+  const destinationByName = new Map(
+    allDestinations
+      .map((item) => [normalizeName(item.name), item] as const)
+      .filter(([name]) => Boolean(name))
+  );
   let unmappedCount = 0;
 
   items.forEach((item) => {
@@ -128,8 +177,13 @@ export async function fetchServerRecommendations(
       : (item as RawDestination | string);
     if (!destinationRef) return;
     const destinationId = getDestinationId(destinationRef);
-    if (!destinationId) return;
-    const mapped = destinationById.get(destinationId);
+    const mappedById = destinationId ? destinationById.get(destinationId) : undefined;
+    const referenceName =
+      typeof destinationRef === 'object' && destinationRef !== null && 'name' in destinationRef
+        ? (destinationRef as { name?: unknown }).name
+        : undefined;
+    const mappedByName = destinationByName.get(normalizeName(referenceName));
+    const mapped = mappedById ?? mappedByName;
     if (!mapped) {
       unmappedCount += 1;
       return;
@@ -159,6 +213,27 @@ export async function fetchServerRecommendations(
       : {};
 
   if (items.length > 0 && destinations.length === 0) {
+    if (allDestinations.length > 0) {
+      console.warn(
+        `Server returned ${items.length} recommendations but none matched loaded destinations (unmapped: ${unmappedCount}). Falling back to local scoring.`
+      );
+      const fallbackScores = new Map<string, number>();
+      const fallbackDestinations = [...allDestinations]
+        .map((destination) => {
+          const score = calculateContentScore(destination, preferences);
+          fallbackScores.set(destination.id, score);
+          return { destination, score };
+        })
+        .sort((a, b) => b.score - a.score)
+        .slice(0, Math.max(1, Math.min(limit, allDestinations.length)))
+        .map((item) => item.destination);
+
+      return {
+        destinations: fallbackDestinations,
+        scores: fallbackScores,
+        metadata: {},
+      };
+    }
     throw new Error(
       `Server returned ${items.length} recommendations but none matched loaded destinations (unmapped: ${unmappedCount}).`
     );
