@@ -155,11 +155,20 @@ export default function App() {
       uniqueRecommended.push(destination);
     });
 
-    // Keep AI-ranked items first, then backfill from admin destinations using local scoring
-    // so short server responses don't leave days empty.
+    // Keep AI-ranked items first, then backfill from admin destinations using local scoring.
+    // Target 2-3 destinations/day when inventory allows.
+    const minPerDay = 2;
+    const maxPerDay = 3;
+    const minTarget = prefs.duration * minPerDay;
+    const maxTarget = prefs.duration * maxPerDay;
+    const desiredTarget = Math.max(uniqueRecommended.length, minTarget);
+    const boundedTarget =
+      uniqueRecommended.length > maxTarget
+        ? uniqueRecommended.length
+        : Math.min(desiredTarget, maxTarget);
     const targetCount = Math.min(
       allDestinations.length,
-      Math.max(prefs.duration, uniqueRecommended.length)
+      Math.max(prefs.duration, boundedTarget)
     );
     const backfill = [...allDestinations]
       .filter((destination) => !seenIds.has(destination.id))

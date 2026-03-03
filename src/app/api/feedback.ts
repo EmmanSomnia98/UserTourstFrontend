@@ -1,4 +1,4 @@
-import { apiPost } from '@/app/api/client';
+import { apiPost, getAuthToken } from '@/app/api/client';
 
 const FEEDBACK_QUEUE_KEY = 'bw_feedback_queue_v1';
 const FEEDBACK_SESSION_KEY = 'bw_feedback_session_id_v1';
@@ -111,6 +111,7 @@ let flushInFlight = false;
 
 export async function flushFeedbackQueue(batchSize = 30): Promise<void> {
   if (flushInFlight) return;
+  if (!getAuthToken()) return;
   flushInFlight = true;
   try {
     while (true) {
