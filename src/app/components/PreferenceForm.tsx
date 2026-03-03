@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import { Checkbox } from '@/app/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { Label } from '@/app/components/ui/label';
 import { Input } from '@/app/components/ui/input';
 import { UserPreferences } from '@/app/types/destination';
+import { searchUsers } from '@/app/api/users';
 import { GeoPoint } from '@/app/utils/travel';
 import { Mountain, Waves, Heart, Compass, ChevronDown, ChevronUp, Sun, LucideBook, Ship, Camera, LocateFixed, Sunrise, MoonStar, Clock3 } from 'lucide-react';
 
@@ -127,9 +129,14 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
   const [duration, setDuration] = useState<string>('');
   const [travelStyle, setTravelStyle] = useState<string[]>(['solo']);
   const [collaborators, setCollaborators] = useState<string[]>([]);
+  const [collaboratorQuery, setCollaboratorQuery] = useState('');
+  const [collaboratorSuggestions, setCollaboratorSuggestions] = useState<string[]>([]);
+  const [isSearchingCollaborators, setIsSearchingCollaborators] = useState(false);
   const [showInterestError, setShowInterestError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [locationWarningOpen, setLocationWarningOpen] = useState(false);
+  const [locationWarningMessage, setLocationWarningMessage] = useState('');
   const [locationStatus, setLocationStatus] = useState<
     'idle' | 'requesting' | 'granted' | 'denied' | 'unavailable' | 'error'
   >('idle');
@@ -140,9 +147,10 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
     : selectedTravelStyle === 'family_group' ? Number.POSITIVE_INFINITY
     : 0;
   const completedCollaborators = collaborators.filter(name => name.trim() !== '');
-  const collaboratorInputCount = collaboratorLimit === 0
-    ? 0
-    : (collaboratorLimit === 1 ? 1 : Math.max(1, completedCollaborators.length + 1));
+  const canAddMoreCollaborators =
+    collaboratorLimit === 0
+      ? false
+      : (collaboratorLimit === Number.POSITIVE_INFINITY || completedCollaborators.length < collaboratorLimit);
 
   const mainInterestIds = interestOptionsWithSubs.map((option) => option.id);
 
@@ -194,32 +202,103 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
     const nextStyle = selectedTravelStyle === style ? 'solo' : style;
     setTravelStyle([nextStyle]);
     if (nextStyle === 'couple') {
-      setCollaborators(prev => prev.slice(0, 1));
-      if (collaborators.length === 0) {
-        setCollaborators(['']);
-      }
+      setCollaborators(prev => prev.filter(name => name.trim() !== '').slice(0, 1));
     } else if (nextStyle === 'family_group') {
-      setCollaborators(prev => {
-        const next = [...prev];
-        while (next.length < 1) next.push('');
-        return next;
-      });
+      setCollaborators(prev => prev.filter(name => name.trim() !== ''));
     } else {
       setCollaborators([]);
     }
+    setCollaboratorQuery('');
+    setCollaboratorSuggestions([]);
   };
 
-  const handleCollaboratorChange = (index: number, value: string) => {
-    setCollaborators(prev => {
-      const next = [...prev];
-      next[index] = value;
+  const addCollaborator = (value: string) => {
+    const normalized = value.trim();
+    if (!normalized || !canAddMoreCollaborators) return;
+    const exists = completedCollaborators.some(
+      (collaborator) => collaborator.toLowerCase() === normalized.toLowerCase()
+    );
+    if (exists) {
+      setCollaboratorQuery('');
+      setCollaboratorSuggestions([]);
+      return;
+    }
+    setCollaborators((prev) => {
+      const next = [...prev, normalized];
+      if (selectedTravelStyle === 'couple') {
+        return next.slice(0, 1);
+      }
       return next;
     });
+    setCollaboratorQuery('');
+    setCollaboratorSuggestions([]);
+  };
+
+  const removeCollaborator = (value: string) => {
+    setCollaborators((prev) => prev.filter((collaborator) => collaborator !== value));
+  };
+
+  useEffect(() => {
+    if (collaboratorLimit === 0) {
+      setCollaboratorSuggestions([]);
+      setIsSearchingCollaborators(false);
+      return;
+    }
+    const query = collaboratorQuery.trim();
+    if (query.length < 2) {
+      setCollaboratorSuggestions([]);
+      setIsSearchingCollaborators(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearchingCollaborators(true);
+    const timer = setTimeout(() => {
+      void searchUsers(query)
+        .then((results) => {
+          if (cancelled) return;
+          const selected = new Set(completedCollaborators.map((name) => name.toLowerCase()));
+          setCollaboratorSuggestions(results.filter((name) => !selected.has(name.toLowerCase())));
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setIsSearchingCollaborators(false);
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [collaboratorLimit, collaboratorQuery, completedCollaborators]);
+
+  useEffect(() => {
+    if (!canAddMoreCollaborators) {
+      setCollaboratorSuggestions([]);
+    }
+  }, [canAddMoreCollaborators]);
+
+  const handleCollaboratorInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    addCollaborator(collaboratorQuery);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
+
+    if (locationStatus !== 'granted') {
+      if (locationStatus === 'unavailable') {
+        setLocationWarningMessage('Location is not supported on this device/browser. Please use a browser that supports location services.');
+      } else if (locationStatus === 'denied') {
+        setLocationWarningMessage('Please allow location access before generating your itinerary.');
+      } else {
+        setLocationWarningMessage('Location access is required. Please tap "Allow Location" first.');
+      }
+      setLocationWarningOpen(true);
+      return;
+    }
 
     if (interests.length === 0) {
       setShowInterestError(true);
@@ -256,6 +335,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
         budget: budgetNum,
         duration: durationNum,
         travelStyle,
+        collaborators: completedCollaborators,
       });
     } catch (error) {
       console.error('Failed to submit preferences:', error);
@@ -455,30 +535,74 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
         {collaboratorLimit > 0 && (
           <div className="space-y-4">
             <Label className="text-lg">Collaborators</Label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {Array.from({ length: collaboratorInputCount }).map((_, index) => {
-                const value = collaborators[index] ?? '';
-                const completed = value.trim() !== '';
-                return (
-                  <div key={`collaborator-${index}`} className="space-y-2">
-                    <Input
-                      type="text"
-                      value={value}
-                      onChange={(e) => handleCollaboratorChange(index, e.target.value)}
-                      placeholder={`Traveler ${index + 1} name`}
-                      className="text-sm"
-                    />
-                    {completed && (
-                      <p className="text-xs text-gray-600">
-                        Username: {value.trim()}
-                      </p>
-                    )}
+            <div className="space-y-3">
+              {completedCollaborators.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {completedCollaborators.map((collaborator) => (
+                    <span
+                      key={collaborator}
+                      className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700"
+                    >
+                      @{collaborator}
+                      <button
+                        type="button"
+                        onClick={() => removeCollaborator(collaborator)}
+                        className="text-blue-600 hover:text-blue-800"
+                        aria-label={`Remove ${collaborator}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <Input
+                type="text"
+                value={collaboratorQuery}
+                onChange={(e) => setCollaboratorQuery(e.target.value)}
+                onKeyDown={handleCollaboratorInputKeyDown}
+                placeholder={
+                  canAddMoreCollaborators
+                    ? (selectedTravelStyle === 'couple'
+                        ? 'Type username or email, then press Enter'
+                        : 'Add collaborator username/email')
+                    : 'Collaborator limit reached'
+                }
+                className="text-sm"
+                disabled={!canAddMoreCollaborators}
+              />
+
+              {isSearchingCollaborators && (
+                <p className="text-xs text-gray-500">Searching users...</p>
+              )}
+
+              {!isSearchingCollaborators && collaboratorSuggestions.length > 0 && (
+                <div className="rounded-md border border-gray-200 bg-white p-2">
+                  <div className="flex flex-wrap gap-2">
+                    {collaboratorSuggestions.map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => addCollaborator(suggestion)}
+                        className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:border-blue-400 hover:text-blue-700"
+                        disabled={!canAddMoreCollaborators}
+                      >
+                        @{suggestion}
+                      </button>
+                    ))}
                   </div>
-                );
-              })}
+                </div>
+              )}
+
+              {!isSearchingCollaborators && collaboratorQuery.trim().length >= 2 && collaboratorSuggestions.length === 0 && canAddMoreCollaborators && (
+                <p className="text-xs text-gray-500">
+                  No suggested users found. Press Enter to add manually.
+                </p>
+              )}
             </div>
             <p className="text-sm text-gray-600">
-              Add travelers who will join the trip.
+              Add collaborators by username or email. You can still type manually and press Enter.
             </p>
           </div>
         )}
@@ -612,10 +736,30 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
           </div>
         </div>
 
-        <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
+        <Button
+          type="submit"
+          size="lg"
+          className="w-full"
+          disabled={isSubmitting}
+        >
           {isSubmitting ? 'Generating Itinerary...' : 'Get My Personalized Itinerary'}
         </Button>
       </form>
+      <Dialog open={locationWarningOpen} onOpenChange={setLocationWarningOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Location Required</DialogTitle>
+            <DialogDescription>
+              {locationWarningMessage}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLocationWarningOpen(false)}>
+              OK
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

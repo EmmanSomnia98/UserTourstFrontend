@@ -103,6 +103,47 @@ function calculateInterestMatchBreakdown(destination: Destination, preferences: 
   return { matchCount, weightedMatchUnits, bestRank };
 }
 
+function calculateTravelStyleScore(destination: Destination, preferences: UserPreferences): number {
+  const selectedStyle = preferences.travelStyle?.[0];
+  const duration = Number.isFinite(destination.duration) ? destination.duration : 0;
+  const collaboratorCount = (preferences.collaborators ?? []).filter((name) => name.trim() !== '').length;
+  let score = 0;
+
+  if (selectedStyle === 'solo') {
+    if (destination.difficulty === 'challenging') score += 20;
+    else if (destination.difficulty === 'moderate') score += 10;
+    else score += 4;
+
+    if (duration >= 8) score += 15;
+    else if (duration >= 5) score += 10;
+    else if (duration >= 3) score += 5;
+  }
+
+  if (selectedStyle === 'couple') {
+    if (destination.difficulty === 'easy') score += 12;
+    else if (destination.difficulty === 'moderate') score += 10;
+    else score -= 8;
+
+    if (duration >= 2 && duration <= 6) score += 10;
+    else if (duration > 8) score -= 6;
+  }
+
+  if (selectedStyle === 'family_group') {
+    if (destination.difficulty === 'easy') score += 18;
+    else if (destination.difficulty === 'moderate') score += 8;
+    else score -= 18;
+    if (duration <= 4) score += 10;
+    else if (duration <= 6) score += 5;
+    else score -= 10;
+
+    if (collaboratorCount >= 3 && destination.difficulty === 'challenging') {
+      score -= 6;
+    }
+  }
+
+  return score;
+}
+
 /**
  * Content-based filtering: Calculate similarity score between user preferences and destination
  */
@@ -146,15 +187,7 @@ export function calculateContentScore(destination: Destination, preferences: Use
     score += 5;
   }
 
-  const styleMatches = preferences.travelStyle.reduce((count, style) => {
-    if (destination.type === style) return count + 20;
-    if (style === 'adventure' && destination.type === 'nature') return count + 10;
-    if (style === 'nature' && destination.type === 'adventure') return count + 10;
-    if (style === 'cultural' && destination.type === 'historical') return count + 15;
-    if (style === 'relaxation' && destination.type === 'nature') return count + 8;
-    return count;
-  }, 0);
-  score += styleMatches;
+  score += calculateTravelStyleScore(destination, preferences);
 
   score += destination.rating * 4;
 
@@ -353,12 +386,7 @@ export function getRecommendationScores(
   } else {
     breakdown.budget = Math.max(0, 20 - budgetRatio * 20);
   }
-
-  preferences.travelStyle.forEach((style) => {
-    if (destination.type === style) {
-      breakdown.travelStyle += 20;
-    }
-  });
+  breakdown.travelStyle = calculateTravelStyleScore(destination, preferences);
 
   const totalScore = contentScore * 0.5 + cfScore * 5 * 0.35 + popularityScore * 20 * 0.15;
 

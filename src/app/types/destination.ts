@@ -25,6 +25,7 @@ export interface UserPreferences {
   budget: number; // Changed from 'low' | 'medium' | 'high' to number
   duration: number; // days
   travelStyle: string[];
+  collaborators?: string[];
 }
 
 export interface ItineraryItem {
