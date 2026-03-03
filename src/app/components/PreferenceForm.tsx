@@ -6,7 +6,7 @@ import { Label } from '@/app/components/ui/label';
 import { Input } from '@/app/components/ui/input';
 import { UserPreferences } from '@/app/types/destination';
 import { GeoPoint } from '@/app/utils/travel';
-import { Mountain, Waves, Heart, Compass, ChevronDown, ChevronUp, Sun, LucideBook, Ship, Camera, LocateFixed } from 'lucide-react';
+import { Mountain, Waves, Heart, Compass, ChevronDown, ChevronUp, Sun, LucideBook, Ship, Camera, LocateFixed, Sunrise, MoonStar, Clock3 } from 'lucide-react';
 
 interface PreferenceFormProps {
   onSubmit: (preferences: UserPreferences) => void | Promise<void>;
@@ -122,6 +122,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
   const [mainInterestOrder, setMainInterestOrder] = useState<string[]>([]);
   const [expandedInterests, setExpandedInterests] = useState<string[]>([]);
   const [activityLevel, setActivityLevel] = useState<'relaxed' | 'moderate' | 'active'>('moderate');
+  const [timePreference, setTimePreference] = useState<'day_only' | 'night_only' | 'whole_day'>('whole_day');
   const [budget, setBudget] = useState<string>('1000');
   const [duration, setDuration] = useState<string>('');
   const [travelStyle, setTravelStyle] = useState<string[]>(['solo']);
@@ -251,6 +252,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
         interests,
         ...(Object.keys(interestRanks).length > 0 ? { interestRanks } : {}),
         activityLevel,
+        timePreference,
         budget: budgetNum,
         duration: durationNum,
         travelStyle,
@@ -397,6 +399,53 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
                     {style === 'couple' && 'You + 1 traveler.'}
                     {style === 'family_group' && 'Add travelers as needed.'}
                   </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <Label className="text-lg">Preferred Time</Label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              {
+                id: 'day_only',
+                title: 'Day only',
+                description: 'Show activities best during daytime.',
+                icon: Sunrise,
+              },
+              {
+                id: 'night_only',
+                title: 'Night only',
+                description: 'Focus on evening and night activities.',
+                icon: MoonStar,
+              },
+              {
+                id: 'whole_day',
+                title: 'Whole day',
+                description: 'Include both daytime and nighttime options.',
+                icon: Clock3,
+              },
+            ].map((option) => {
+              const Icon = option.icon;
+              const isSelected = timePreference === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setTimePreference(option.id as 'day_only' | 'night_only' | 'whole_day')}
+                  className={`rounded-lg border-2 px-4 py-3 text-left transition-all ${
+                    isSelected
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Icon className={`w-4 h-4 ${isSelected ? 'text-blue-500' : 'text-gray-500'}`} />
+                    <p className="text-sm font-semibold">{option.title}</p>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-600">{option.description}</p>
                 </button>
               );
             })}

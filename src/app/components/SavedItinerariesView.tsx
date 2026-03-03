@@ -4,18 +4,20 @@ import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
-import { Calendar, MapPin, Trash2, Edit, DollarSign } from 'lucide-react';
+import { Calendar, MapPin, Trash2, Edit, DollarSign, Eye } from 'lucide-react';
 import { deleteRemoteItinerary, fetchItineraries } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
 
 interface SavedItinerariesViewProps {
   onViewItinerary: (itinerary: SavedItinerary) => void;
+  onEditItinerary: (itinerary: SavedItinerary) => void;
   onBackToWelcome: () => void;
   onDeleteItinerarySuccess?: (itineraryId: string) => void;
 }
 
 export function SavedItinerariesView({
   onViewItinerary,
+  onEditItinerary,
   onBackToWelcome,
   onDeleteItinerarySuccess
 }: SavedItinerariesViewProps) {
@@ -191,6 +193,14 @@ export function SavedItinerariesView({
                   <Button 
                     className="flex-1"
                     onClick={() => onViewItinerary(itinerary)}
+                    variant="outline"
+                  >
+                    <Eye className="w-4 h-4 mr-2" />
+                    View Itinerary
+                  </Button>
+                  <Button 
+                    className="flex-1"
+                    onClick={() => onEditItinerary(itinerary)}
                   >
                     <Edit className="w-4 h-4 mr-2" />
                     Edit

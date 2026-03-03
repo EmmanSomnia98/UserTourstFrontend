@@ -21,6 +21,7 @@ export interface UserPreferences {
   interests: string[];
   interestRanks?: Record<string, number>;
   activityLevel: 'relaxed' | 'moderate' | 'active';
+  timePreference?: 'day_only' | 'night_only' | 'whole_day';
   budget: number; // Changed from 'low' | 'medium' | 'high' to number
   duration: number; // days
   travelStyle: string[];

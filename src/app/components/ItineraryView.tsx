@@ -49,48 +49,48 @@ export function ItineraryView({
   const [saveNameDraft, setSaveNameDraft] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
-  const [finishedDestinationIds, setFinishedDestinationIds] = useState<Set<string>>(new Set());
+  const [finishedDestinationKeys, setFinishedDestinationKeys] = useState<Set<string>>(new Set());
   const saveRequestInFlight = useRef(false);
   const getDuration = (value: number) => (Number.isFinite(value) ? value : 0);
   const schedule = calculateItinerarySchedule(destinations, tripDays, userInterests, interestRanks);
   const emptyDays = Array.from(schedule.entries()).filter(([, dayDestinations]) => dayDestinations.length === 0).length;
+  const getEntryKey = (destination: Destination, day: number, index: number) =>
+    `${day}-${index}-${destination.id || destination.name}`;
+  const itineraryEntryKeys = Array.from(schedule.entries()).flatMap(([day, dayDestinations]) =>
+    dayDestinations.map((destination, index) => getEntryKey(destination, day, index))
+  );
   
   const totalCost = destinations.reduce((sum, dest) => sum + dest.estimatedCost, 0);
   const totalDuration = destinations.reduce((sum, dest) => sum + getDuration(dest.duration), 0);
   const isItineraryFinished =
-    destinations.length > 0 &&
-    destinations.every((destination) => finishedDestinationIds.has(destination.id));
+    itineraryEntryKeys.length > 0 &&
+    itineraryEntryKeys.every((key) => finishedDestinationKeys.has(key));
 
   useEffect(() => {
-    const validIds = new Set(destinations.map((dest) => dest.id));
-    setFinishedDestinationIds((prev) => {
-      const next = new Set<string>();
-      prev.forEach((id) => {
-        if (validIds.has(id)) {
-          next.add(id);
-        }
-      });
+    const validKeys = new Set(itineraryEntryKeys);
+    setFinishedDestinationKeys((prev) => {
+      const next = new Set(Array.from(prev).filter((key) => validKeys.has(key)));
       return next.size === prev.size ? prev : next;
     });
-  }, [destinations]);
+  }, [itineraryEntryKeys]);
 
-  const toggleFinished = (destinationId: string) => {
-    setFinishedDestinationIds((prev) => {
+  const toggleFinished = (entryKey: string) => {
+    setFinishedDestinationKeys((prev) => {
       const next = new Set(prev);
-      if (next.has(destinationId)) {
-        next.delete(destinationId);
+      if (next.has(entryKey)) {
+        next.delete(entryKey);
       } else {
-        next.add(destinationId);
+        next.add(entryKey);
       }
       return next;
     });
   };
 
-  const handleRemoveClick = (destinationId: string) => {
-    setFinishedDestinationIds((prev) => {
-      if (!prev.has(destinationId)) return prev;
+  const handleRemoveClick = (destinationId: string, entryKey: string) => {
+    setFinishedDestinationKeys((prev) => {
+      if (!prev.has(entryKey)) return prev;
       const next = new Set(prev);
-      next.delete(destinationId);
+      next.delete(entryKey);
       return next;
     });
     onRemoveDestination(destinationId);
@@ -243,7 +243,8 @@ export function ItineraryView({
               {dayDestinations.map((dest, index) => (
                 <div key={dest.id ?? `${dest.name}-${day}-${index}`} className="relative">
                   {(() => {
-                    const isFinished = finishedDestinationIds.has(dest.id);
+                    const entryKey = getEntryKey(dest, day, index);
+                    const isFinished = finishedDestinationKeys.has(entryKey);
                     return (
                       <>
                         <div
@@ -262,7 +263,7 @@ export function ItineraryView({
                   
                   <Card
                     className={`p-4 cursor-pointer hover:shadow-md transition-shadow ${
-                      finishedDestinationIds.has(dest.id) ? 'border-emerald-200 bg-emerald-50/30' : ''
+                      finishedDestinationKeys.has(getEntryKey(dest, day, index)) ? 'border-emerald-200 bg-emerald-50/30' : ''
                     }`}
                     role="button"
                     tabIndex={0}
@@ -301,22 +302,22 @@ export function ItineraryView({
 
                       <div className="flex justify-end gap-2 sm:block pt-1 sm:pt-0">
                         <Button
-                          variant={finishedDestinationIds.has(dest.id) ? 'secondary' : 'outline'}
+                          variant={finishedDestinationKeys.has(getEntryKey(dest, day, index)) ? 'secondary' : 'outline'}
                           size="sm"
                           onClick={(event) => {
                             event.stopPropagation();
-                            toggleFinished(dest.id);
+                            toggleFinished(getEntryKey(dest, day, index));
                           }}
                           className="flex-shrink-0"
                         >
-                          {finishedDestinationIds.has(dest.id) ? 'Finished' : 'Finish'}
+                          {finishedDestinationKeys.has(getEntryKey(dest, day, index)) ? 'Finished' : 'Finish'}
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={(event) => {
                             event.stopPropagation();
-                            handleRemoveClick(dest.id);
+                            handleRemoveClick(dest.id, getEntryKey(dest, day, index));
                           }}
                           className="flex-shrink-0"
                         >

@@ -292,7 +292,7 @@ export default function App() {
     setCurrentView('recommendations');
   };
 
-  const handleViewSavedItinerary = (savedItinerary: SavedItinerary) => {
+  const hydrateSavedItineraryState = (savedItinerary: SavedItinerary) => {
     trackEvent('saved_itinerary_viewed', {
       itineraryId: savedItinerary.id,
       metadata: {
@@ -310,6 +310,15 @@ export default function App() {
       interests: [],
       travelStyle: []
     });
+  };
+
+  const handleViewSavedItinerary = (savedItinerary: SavedItinerary) => {
+    hydrateSavedItineraryState(savedItinerary);
+    setCurrentView('itinerary');
+  };
+
+  const handleEditSavedItinerary = (savedItinerary: SavedItinerary) => {
+    hydrateSavedItineraryState(savedItinerary);
     setCurrentView('edit-saved');
   };
 
@@ -812,6 +821,7 @@ export default function App() {
         {currentView === 'saved-itineraries' && (
           <SavedItinerariesView
             onViewItinerary={handleViewSavedItinerary}
+            onEditItinerary={handleEditSavedItinerary}
             onBackToWelcome={handleBackToWelcome}
             onDeleteItinerarySuccess={(itineraryId) => {
               trackEvent('saved_itinerary_deleted', { itineraryId });
