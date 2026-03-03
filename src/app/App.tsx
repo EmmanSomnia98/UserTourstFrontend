@@ -3,7 +3,7 @@ import { Destination, UserPreferences } from '@/app/types/destination';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { fetchDestinations } from '@/app/api/destinations';
 import { fetchServerRecommendations } from '@/app/api/recommendations';
-import { clearAuthSession, getAuthToken, getAuthUser } from '@/app/api/client';
+import { AUTH_CHANGE_EVENT, clearAuthSession, getAuthToken, getAuthUser } from '@/app/api/client';
 import { type AuthUser } from '@/app/api/auth';
 import { buildFeedbackEvent, flushFeedbackQueue, recordFeedbackEvent } from '@/app/api/feedback';
 import { useIsMobile } from '@/app/components/ui/use-mobile';
@@ -75,6 +75,25 @@ export default function App() {
     if (storedUser) clearAuthSession();
     setIsAuthenticated(false);
     setCurrentUser(null);
+  }, []);
+
+  useEffect(() => {
+    const syncAuthFromStorage = () => {
+      const token = getAuthToken();
+      const user = getAuthUser<AuthUser>();
+      if (!token) {
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+        return;
+      }
+      setIsAuthenticated(true);
+      setCurrentUser(user ?? null);
+    };
+
+    window.addEventListener(AUTH_CHANGE_EVENT, syncAuthFromStorage);
+    return () => {
+      window.removeEventListener(AUTH_CHANGE_EVENT, syncAuthFromStorage);
+    };
   }, []);
 
   useEffect(() => {

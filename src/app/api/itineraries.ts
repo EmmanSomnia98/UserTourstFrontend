@@ -453,6 +453,20 @@ export async function createItinerary(itinerary: SavedItinerary): Promise<SavedI
     const created = await request;
     recentCreateByKey.set(signature, { at: Date.now(), value: created });
     return created;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error ?? '');
+    const isAuthError =
+      message.includes('(401)') ||
+      message.includes('(403)') ||
+      message.toLowerCase().includes('unauthorized') ||
+      message.toLowerCase().includes('token') ||
+      message.toLowerCase().includes('jwt');
+
+    if (isAuthError) {
+      clearAuthSession();
+      return null;
+    }
+    throw error;
   } finally {
     inFlightCreateByKey.delete(signature);
   }

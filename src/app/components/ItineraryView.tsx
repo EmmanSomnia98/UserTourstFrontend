@@ -136,7 +136,22 @@ export function ItineraryView({
       setIsSaveDialogOpen(false);
       onSaveSuccess?.(created);
     } catch (error) {
-      setSaveError('Failed to save itinerary. Please try again.');
+      const message = error instanceof Error ? error.message : String(error ?? '');
+      if (message.includes('(401)') || message.includes('(403)')) {
+        setSaveError('Your session expired. Please sign in again to save itineraries.');
+      } else if (message.includes('(400)') || message.includes('(422)')) {
+        setSaveError('Unable to save this itinerary due to invalid trip data. Please adjust destinations and try again.');
+      } else if (message.includes('(404)')) {
+        setSaveError('Save endpoint was not found on the server. Please verify backend deployment.');
+      } else if (message.includes('(500)') || message.includes('(502)') || message.includes('(503)')) {
+        setSaveError('Server error while saving itinerary. Please try again in a moment.');
+      } else if (message.toLowerCase().includes('failed to fetch')) {
+        setSaveError('Cannot reach the server right now. Check your network and try again.');
+      } else if (message.trim()) {
+        setSaveError(message);
+      } else {
+        setSaveError('Failed to save itinerary. Please try again.');
+      }
     } finally {
       setIsSaving(false);
       saveRequestInFlight.current = false;

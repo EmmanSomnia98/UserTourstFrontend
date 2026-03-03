@@ -112,8 +112,9 @@ export async function fetchRoutingEstimate(
     } catch (error) {
       lastError = error;
       const message = error instanceof Error ? error.message : String(error ?? '');
-      // Try alternate payload formats only for validation/client errors.
-      if (message.includes('Request failed (400)') || message.includes('Request failed (422)')) {
+      // Retry alternate payload shapes only for 422 payload validation errors.
+      // For 400 responses, stop early to avoid flooding the routing endpoint.
+      if (message.includes('Request failed (422)')) {
         continue;
       }
       throw error;
