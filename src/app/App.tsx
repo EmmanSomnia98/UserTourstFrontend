@@ -847,8 +847,9 @@ export default function App() {
               trackEvent('saved_itinerary_deleted', { itineraryId });
             }}
             onUpdate={() => {
-              // Refresh the saved itinerary list when updates are made
+              // Return to saved itineraries after updates to avoid empty edit state.
               setViewingSavedItinerary(null);
+              setCurrentView('saved-itineraries');
             }}
           />
         )}

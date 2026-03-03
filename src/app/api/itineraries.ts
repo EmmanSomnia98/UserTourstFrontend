@@ -4,6 +4,9 @@ import { Destination } from '@/app/types/destination';
 
 type BackendItineraryDestination = {
   destination?: Destination & {
+    id?: unknown;
+    _id?: unknown;
+    destinationId?: unknown;
     durationInHours?: number | string;
     durationHours?: number | string;
     visitDuration?: number | string;
@@ -26,6 +29,7 @@ type BackendItineraryDestination = {
       coordinates?: [number, number];
     };
   };
+  destinationId?: unknown;
   cost?: number;
   hybridScore?: number;
 };
@@ -68,17 +72,21 @@ const recentCreateByKey = new Map<string, { at: number; value: SavedItinerary | 
 function toDestinationList(items: BackendItineraryDestination[] | undefined): Destination[] {
   if (!items?.length) return [];
   return items
-    .map((item) => item.destination)
-    .map((destination) =>
-      destination
-        ? ({
-            ...destination,
-            duration: normalizeDuration(destination),
-            location: normalizeLocation(destination),
-            image: resolveAssetUrl(destination.image),
-          } as Destination)
-        : destination
-    )
+    .map((item) => {
+      const destination = item.destination;
+      if (!destination) return null;
+      const normalizedId = normalizeIdentifier(
+        destination.id ?? destination._id ?? destination.destinationId ?? item.destinationId
+      );
+      if (!normalizedId) return null;
+      return {
+        ...(destination as Destination),
+        id: normalizedId,
+        duration: normalizeDuration(destination),
+        location: normalizeLocation(destination),
+        image: resolveAssetUrl(destination.image),
+      } as Destination;
+    })
     .filter((dest): dest is Destination => Boolean(dest));
 }
 
@@ -123,6 +131,21 @@ function parseNumberish(value: unknown): number | null {
   if (!match) return null;
   const parsed = Number(match[1]);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeIdentifier(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? String(value) : null;
+  }
+  if (value && typeof value === 'object') {
+    const oid = (value as { $oid?: unknown }).$oid;
+    if (typeof oid === 'string' && oid.trim()) return oid.trim();
+  }
+  return null;
 }
 
 function normalizeDuration(destination: BackendItineraryDestination['destination']): number {
@@ -171,6 +194,31 @@ function parseTripDaysCandidate(itinerary: BackendItinerary): number {
   return 0;
 }
 
+function normalizeItineraryId(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? String(value) : null;
+  }
+  if (value && typeof value === 'object') {
+    const maybeOid = (value as { $oid?: unknown }).$oid;
+    if (typeof maybeOid === 'string' && maybeOid.trim()) {
+      return maybeOid.trim();
+    }
+  }
+  return null;
+}
+
+function isSafeRemoteItineraryId(id: string): boolean {
+  const trimmed = id.trim();
+  if (!trimmed) return false;
+  if (trimmed.toLowerCase() === '[object object]') return false;
+  if (trimmed.startsWith('itinerary-')) return false;
+  return true;
+}
+
 function mapBackendItinerary(itinerary: BackendItinerary, index: number): SavedItinerary {
   const destinations = toDestinationList(itinerary.destinations);
   const durationFromDestinations = destinations.reduce((sum, dest) => sum + Number(dest.duration || 0), 0);
@@ -179,8 +227,12 @@ function mapBackendItinerary(itinerary: BackendItinerary, index: number): SavedI
   const createdAt = itinerary.createdAt ?? new Date().toISOString();
   const backendTripDays = parseTripDaysCandidate(itinerary);
   const inferredTripDays = deriveTripDays(totalDuration);
+  const normalizedId =
+    normalizeItineraryId(itinerary.id) ??
+    normalizeItineraryId(itinerary._id) ??
+    `itinerary-${index}`;
   return {
-    id: itinerary.id ?? itinerary._id ?? `itinerary-${index}`,
+    id: normalizedId,
     name: itinerary.name?.trim() || `Itinerary ${index + 1}`,
     destinations,
     // Prefer explicit backend day fields when present.
@@ -305,11 +357,19 @@ export async function fetchItineraries(): Promise<SavedItinerary[]> {
     const payload = await apiGet<ItineraryPayload>('/api/itineraries');
     return extractItineraries(payload);
   } catch (error) {
-    if (error instanceof Error && error.message.includes('(401)')) {
+    const message = error instanceof Error ? error.message : String(error ?? '');
+    const isAuthError =
+      message.includes('(401)') ||
+      message.includes('(403)') ||
+      message.toLowerCase().includes('unauthorized') ||
+      message.toLowerCase().includes('token') ||
+      message.toLowerCase().includes('jwt');
+    if (isAuthError) {
       clearAuthSession();
       return [];
     }
-    throw error;
+    console.error('fetchItineraries failed, returning empty list:', error);
+    return [];
   }
 }
 
@@ -338,6 +398,24 @@ export async function createItinerary(itinerary: SavedItinerary): Promise<SavedI
     return inFlight;
   }
 
+  const payloadDestinations = itinerary.destinations
+    .map((destination) => {
+      const destinationId = normalizeIdentifier(destination.id);
+      if (!destinationId) return null;
+      return {
+        destination: destinationId,
+        destinationId,
+        cost: destination.estimatedCost,
+        duration: destination.duration,
+        durationHours: destination.duration,
+      };
+    })
+    .filter((value): value is NonNullable<typeof value> => Boolean(value));
+
+  if (itinerary.destinations.length > 0 && payloadDestinations.length === 0) {
+    throw new Error('Unable to save itinerary: destination IDs are missing.');
+  }
+
   const payload = {
     name: itinerary.name,
     totalCost: itinerary.totalCost,
@@ -355,14 +433,7 @@ export async function createItinerary(itinerary: SavedItinerary): Promise<SavedI
     itinerary_days: itinerary.tripDays,
     totalDuration: itinerary.totalDuration,
     durationHours: itinerary.totalDuration,
-    destinations: itinerary.destinations.map((destination) => ({
-      // Send identifiers only for compatibility with Mongoose ObjectId refs.
-      destination: destination.id,
-      destinationId: destination.id,
-      cost: destination.estimatedCost,
-      duration: destination.duration,
-      durationHours: destination.duration,
-    })),
+    destinations: payloadDestinations,
   };
 
   const request = (async () => {
@@ -390,6 +461,7 @@ export async function createItinerary(itinerary: SavedItinerary): Promise<SavedI
 export async function deleteRemoteItinerary(id: string): Promise<boolean> {
   const token = getAuthToken();
   if (!token) return false;
+  if (!isSafeRemoteItineraryId(id)) return false;
 
   try {
     await apiDelete(`/api/itineraries/${encodeURIComponent(id)}`);
@@ -399,6 +471,7 @@ export async function deleteRemoteItinerary(id: string): Promise<boolean> {
       clearAuthSession();
       return false;
     }
-    throw error;
+    console.error('deleteRemoteItinerary failed:', error);
+    return false;
   }
 }

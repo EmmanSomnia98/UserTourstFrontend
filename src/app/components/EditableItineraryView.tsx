@@ -44,14 +44,21 @@ export function EditableItineraryView({
   const schedule = calculateItinerarySchedule(destinations, tripDays);
   const totalCost = destinations.reduce((sum, dest) => sum + dest.estimatedCost, 0);
   const totalDuration = destinations.reduce((sum, dest) => sum + getDuration(dest.duration), 0);
-
   // Get destinations not already in itinerary
   const availableDestinations = allDestinations.filter(
     dest => !destinations.some(d => d.id === dest.id)
   );
 
   const handleRemoveDestination = (destinationId: string) => {
-    setDestinations(destinations.filter(d => d.id !== destinationId));
+    let removed = false;
+    const next = destinations.filter((destination) => {
+      if (removed) return true;
+      if (destination.id !== destinationId) return true;
+      removed = true;
+      return false;
+    });
+    if (!removed) return;
+    setDestinations(next);
     setHasChanges(true);
   };
 
@@ -72,14 +79,8 @@ export function EditableItineraryView({
   const handleSaveChanges = async () => {
     setSaveError(null);
     setIsSaving(true);
-    // Delete old version and save new version
+    // Save new version first, then try to remove old version.
     try {
-      const removed = await deleteRemoteItinerary(savedItinerary.id);
-      if (!removed) {
-        setSaveError('Please sign in again to update this itinerary.');
-        return;
-      }
-
       const updatedItinerary: SavedItinerary = {
         ...savedItinerary,
         name: itineraryName.trim() || savedItinerary.name,
@@ -95,11 +96,24 @@ export function EditableItineraryView({
         return;
       }
 
+      // Best-effort cleanup of the previous version.
+      if (savedItinerary.id && created.id !== savedItinerary.id) {
+        const removed = await deleteRemoteItinerary(savedItinerary.id);
+        if (!removed) {
+          setSaveError('Changes saved as a new itinerary, but we could not remove the old version.');
+        }
+      }
+
       setHasChanges(false);
       onSaveChangesSuccess?.(created);
       onUpdate();
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Failed to save changes.');
+      const message = error instanceof Error ? error.message : '';
+      if (message.includes('(500)')) {
+        setSaveError('Server error while saving changes. Please try again.');
+      } else {
+        setSaveError(error instanceof Error ? error.message : 'Failed to save changes.');
+      }
     } finally {
       setIsSaving(false);
     }
@@ -111,7 +125,7 @@ export function EditableItineraryView({
     try {
       const deleted = await deleteRemoteItinerary(savedItinerary.id);
       if (!deleted) {
-        setSaveError('Please sign in again to delete this itinerary.');
+        setSaveError('Unable to delete this itinerary right now. Please try again.');
         return;
       }
       onDeleteSuccess?.(savedItinerary.id);
