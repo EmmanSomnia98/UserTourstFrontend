@@ -34,6 +34,7 @@ export function CollaborationNotifications({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
+  const [inviteResolution, setInviteResolution] = useState<Record<string, 'accepted' | 'declined' | 'already_responded'>>({});
 
   const unreadCount = useMemo(() => items.filter((item) => !item.read).length, [items]);
 
@@ -51,7 +52,14 @@ export function CollaborationNotifications({
       try {
         const next = await fetchCollaborationNotifications();
         if (!active) return;
-        setItems(next);
+        setItems(
+          next.map((item) => {
+            if (item.type !== 'invite') return item;
+            const key = item.invitationId ?? item.id;
+            if (!inviteResolution[key]) return item;
+            return { ...item, read: true };
+          })
+        );
       } catch (loadError) {
         if (!active) return;
         setError(loadError instanceof Error ? loadError.message : 'Failed to load notifications.');
@@ -69,7 +77,21 @@ export function CollaborationNotifications({
       active = false;
       clearInterval(interval);
     };
-  }, [isAuthenticated]);
+  }, [inviteResolution, isAuthenticated]);
+
+  const getInviteResolution = (item: CollaborationNotification) => {
+    if (item.type !== 'invite') return null;
+    const key = item.invitationId ?? item.id;
+    return inviteResolution[key] ?? null;
+  };
+
+  const getInviteStatusText = (item: CollaborationNotification) => {
+    const status = getInviteResolution(item);
+    if (status === 'accepted') return 'Invitation accepted.';
+    if (status === 'declined') return 'Invitation declined.';
+    if (status === 'already_responded') return 'Invitation already responded.';
+    return null;
+  };
 
   const markRead = async (item: CollaborationNotification) => {
     if (item.read) return;
@@ -84,11 +106,42 @@ export function CollaborationNotifications({
   const respondInvite = async (item: CollaborationNotification, action: 'accept' | 'decline') => {
     const invitationId = item.invitationId ?? item.id;
     setActingId(item.id);
+    setError(null);
     try {
       await respondToInvitation(invitationId, action);
-      setItems((prev) => prev.filter((candidate) => candidate.id !== item.id));
+      setInviteResolution((prev) => ({ ...prev, [invitationId]: action === 'accept' ? 'accepted' : 'declined' }));
+      setItems((prev) =>
+        prev.map((candidate) =>
+          candidate.id === item.id
+            ? { ...candidate, read: true }
+            : candidate
+        )
+      );
+      try {
+        await markNotificationRead(item.id);
+      } catch {
+        // Keep local read state even if mark-read call fails.
+      }
     } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : 'Failed to update invitation.');
+      const message = actionError instanceof Error ? actionError.message : 'Failed to update invitation.';
+      const normalized = message.toLowerCase();
+      if (normalized.includes('(409)') || normalized.includes('already responded')) {
+        setInviteResolution((prev) => ({ ...prev, [invitationId]: 'already_responded' }));
+        setItems((prev) =>
+          prev.map((candidate) =>
+            candidate.id === item.id
+              ? { ...candidate, read: true }
+              : candidate
+          )
+        );
+        try {
+          await markNotificationRead(item.id);
+        } catch {
+          // Keep local read state even if mark-read call fails.
+        }
+      } else {
+        setError(message);
+      }
     } finally {
       setActingId(null);
     }
@@ -135,7 +188,7 @@ export function CollaborationNotifications({
                     </Button>
                   )}
                 </div>
-                {item.type === 'invite' && (
+                {item.type === 'invite' && !getInviteResolution(item) && (
                   <div className="mt-2 flex items-center gap-2">
                     <Button
                       size="sm"
@@ -158,6 +211,9 @@ export function CollaborationNotifications({
                     </Button>
                   </div>
                 )}
+                {item.type === 'invite' && getInviteStatusText(item) && (
+                  <p className="mt-2 text-xs font-medium text-emerald-700">{getInviteStatusText(item)}</p>
+                )}
                 {item.itineraryId && item.type !== 'invite' && (
                   <Button
                     size="sm"
@@ -179,4 +235,3 @@ export function CollaborationNotifications({
     </div>
   );
 }
-
