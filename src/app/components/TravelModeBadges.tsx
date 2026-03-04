@@ -46,7 +46,8 @@ function isRoutingProviderUnavailable(error: unknown): boolean {
 }
 
 export function TravelModeBadges({ destination, origin }: TravelModeBadgesProps) {
-  const canUseRoutingApi = import.meta.env.VITE_ENABLE_ROUTING_API !== 'false';
+  // Keep routing API opt-in so local/dev runs don't flood the console when backend routing is unavailable.
+  const canUseRoutingApi = import.meta.env.VITE_ENABLE_ROUTING_API === 'true';
   const hasLocation = hasValidLocation(destination);
   const selectedOrigin = origin ?? DEFAULT_ORIGIN;
 
@@ -128,9 +129,32 @@ export function TravelModeBadges({ destination, origin }: TravelModeBadgesProps)
     setBike({ loading: true });
     setDrive({ loading: true });
 
-    void loadEstimate('walking', setWalk);
-    void loadEstimate('cycling', setBike);
-    void loadEstimate('driving', setDrive);
+    // Fetch one route profile and derive other mode durations from distance.
+    // This avoids tripling API traffic per destination card.
+    void loadEstimate('driving', (state) => {
+      setDrive(state);
+      if (state.loading) return;
+      if (state.estimate) {
+        const distanceKm = state.estimate.distanceKm;
+        setWalk({
+          loading: false,
+          estimate: {
+            distanceKm,
+            durationMin: estimateMinutes(distanceKm, 5),
+          },
+        });
+        setBike({
+          loading: false,
+          estimate: {
+            distanceKm,
+            durationMin: estimateMinutes(distanceKm, 15),
+          },
+        });
+        return;
+      }
+      setWalk({ loading: false, error: state.error });
+      setBike({ loading: false, error: state.error });
+    });
   }, [destination.id, destination.name, destination.location?.lat, destination.location?.lng, canUseRoutingApi, hasLocation, selectedOrigin.lat, selectedOrigin.lng]);
 
   const renderBadge = (

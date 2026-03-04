@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Destination } from '@/app/types/destination';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { Card } from '@/app/components/ui/card';
@@ -11,10 +11,13 @@ import { Calendar, Clock, Trash2, Plus, Save, X, Edit2, Wallet } from 'lucide-re
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { createItinerary, deleteRemoteItinerary } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
+import { inviteCollaboratorToItinerary, pushItinerarySync } from '@/app/api/collaboration';
+import { useItineraryCollaboration } from '@/app/hooks/use-itinerary-collaboration';
 
 interface EditableItineraryViewProps {
   savedItinerary: SavedItinerary;
   allDestinations: Destination[];
+  currentUserId?: string;
   onBack: () => void;
   onUpdate: () => void;
   onSaveChangesSuccess?: (savedItinerary: SavedItinerary) => void;
@@ -24,6 +27,7 @@ interface EditableItineraryViewProps {
 export function EditableItineraryView({
   savedItinerary,
   allDestinations,
+  currentUserId,
   onBack,
   onUpdate,
   onSaveChangesSuccess,
@@ -39,7 +43,19 @@ export function EditableItineraryView({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [inviteQuery, setInviteQuery] = useState('');
+  const [isInviting, setIsInviting] = useState(false);
+  const [inviteMessage, setInviteMessage] = useState<string | null>(null);
+  const [liveNotice, setLiveNotice] = useState<string | null>(null);
   const getDuration = (value: number) => (Number.isFinite(value) ? value : 0);
+
+  const destinationById = useMemo(() => {
+    const map = new Map<string, Destination>();
+    allDestinations.forEach((destination) => {
+      map.set(destination.id, destination);
+    });
+    return map;
+  }, [allDestinations]);
 
   const schedule = calculateItinerarySchedule(destinations, tripDays);
   const totalCost = destinations.reduce((sum, dest) => sum + dest.estimatedCost, 0);
@@ -48,6 +64,31 @@ export function EditableItineraryView({
   const availableDestinations = allDestinations.filter(
     dest => !destinations.some(d => d.id === dest.id)
   );
+
+  const { collaborationStatus, publishEdit } = useItineraryCollaboration({
+    itineraryId: savedItinerary.id,
+    actorId: currentUserId,
+    enabled: Boolean(currentUserId),
+    onRemoteEdit: (event) => {
+      const nextName = event.edit.name;
+      const nextTripDays = event.edit.tripDays;
+      const nextDestinationIds = event.edit.destinationIds;
+      if (typeof nextName === 'string' && nextName.trim()) {
+        setItineraryName(nextName.trim());
+      }
+      if (typeof nextTripDays === 'number' && Number.isFinite(nextTripDays) && nextTripDays > 0) {
+        setTripDays(Math.round(nextTripDays));
+      }
+      if (Array.isArray(nextDestinationIds)) {
+        const mapped = nextDestinationIds
+          .map((id) => destinationById.get(id))
+          .filter((item): item is Destination => Boolean(item));
+        setDestinations(mapped);
+      }
+      setHasChanges(true);
+      setLiveNotice(event.actorName ? `Updated by ${event.actorName}` : 'Itinerary updated by a collaborator.');
+    },
+  });
 
   const handleRemoveDestination = (destinationId: string) => {
     let removed = false;
@@ -60,12 +101,15 @@ export function EditableItineraryView({
     if (!removed) return;
     setDestinations(next);
     setHasChanges(true);
+    publishEdit({ destinationIds: next.map((item) => item.id) });
   };
 
   const handleAddDestination = (destination: Destination) => {
     if (!destinations.some(d => d.id === destination.id)) {
-      setDestinations([...destinations, destination]);
+      const next = [...destinations, destination];
+      setDestinations(next);
       setHasChanges(true);
+      publishEdit({ destinationIds: next.map((item) => item.id) });
     }
   };
 
@@ -73,6 +117,26 @@ export function EditableItineraryView({
     if (itineraryName.trim()) {
       setIsEditingName(false);
       setHasChanges(true);
+      publishEdit({ name: itineraryName.trim() });
+    }
+  };
+
+  const handleInviteCollaborator = async () => {
+    const trimmed = inviteQuery.trim();
+    if (!trimmed) return;
+    setInviteMessage(null);
+    setIsInviting(true);
+    try {
+      await inviteCollaboratorToItinerary({
+        itineraryId: savedItinerary.id,
+        collaboratorLabel: trimmed,
+      });
+      setInviteQuery('');
+      setInviteMessage('Invitation sent.');
+    } catch (error) {
+      setInviteMessage(error instanceof Error ? error.message : 'Failed to send invitation.');
+    } finally {
+      setIsInviting(false);
     }
   };
 
@@ -95,6 +159,22 @@ export function EditableItineraryView({
         setSaveError('Please sign in again to update this itinerary.');
         return;
       }
+      try {
+        await pushItinerarySync({
+          itineraryId: created.id,
+          name: created.name,
+          tripDays: created.tripDays,
+          destinationIds: created.destinations.map((item) => item.id),
+          sourceUserId: currentUserId,
+        });
+      } catch (syncError) {
+        console.warn('Collaboration sync failed:', syncError);
+      }
+      publishEdit({
+        name: created.name,
+        tripDays: created.tripDays,
+        destinationIds: created.destinations.map((item) => item.id),
+      });
 
       // Best-effort cleanup of the previous version.
       if (savedItinerary.id && created.id !== savedItinerary.id) {
@@ -206,6 +286,36 @@ export function EditableItineraryView({
           </div>
 
           <Separator />
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Live collaboration</p>
+                <p className="text-sm text-slate-700">
+                  Status: <span className="font-medium">{collaborationStatus}</span>
+                </p>
+                {liveNotice && <p className="text-xs text-slate-500">{liveNotice}</p>}
+              </div>
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                <input
+                  type="text"
+                  value={inviteQuery}
+                  onChange={(event) => setInviteQuery(event.target.value)}
+                  placeholder="Invite by username/email"
+                  className="h-9 min-w-56 rounded-md border border-slate-300 px-3 text-sm focus:border-blue-500 focus:outline-none"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => void handleInviteCollaborator()}
+                  disabled={isInviting || !inviteQuery.trim()}
+                  className="h-9"
+                >
+                  {isInviting ? 'Inviting...' : 'Send Invite'}
+                </Button>
+              </div>
+            </div>
+            {inviteMessage && <p className="mt-2 text-xs text-slate-600">{inviteMessage}</p>}
+          </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="text-center p-4 bg-blue-50 rounded-lg">

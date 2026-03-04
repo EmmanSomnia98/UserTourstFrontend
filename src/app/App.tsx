@@ -3,6 +3,7 @@ import { Destination, UserPreferences } from '@/app/types/destination';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { fetchDestinations } from '@/app/api/destinations';
 import { fetchServerRecommendations } from '@/app/api/recommendations';
+import { fetchItineraries } from '@/app/api/itineraries';
 import { AUTH_CHANGE_EVENT, clearAuthSession, getAuthToken, getAuthUser } from '@/app/api/client';
 import { type AuthUser } from '@/app/api/auth';
 import { buildFeedbackEvent, flushFeedbackQueue, recordFeedbackEvent } from '@/app/api/feedback';
@@ -16,6 +17,7 @@ import { RecommendationsView } from '@/app/components/RecommendationsView';
 import { ItineraryView } from '@/app/components/ItineraryView';
 import { SavedItinerariesView } from '@/app/components/SavedItinerariesView';
 import { EditableItineraryView } from '@/app/components/EditableItineraryView';
+import { CollaborationNotifications } from '@/app/components/CollaborationNotifications';
 import { Button } from '@/app/components/ui/button';
 import {
   Dialog,
@@ -346,6 +348,21 @@ export default function App() {
     setViewingSavedItinerary(null);
   };
 
+  const handleOpenCollaborativeItinerary = async (itineraryId: string) => {
+    try {
+      const all = await fetchItineraries();
+      const found = all.find((item) => item.id === itineraryId);
+      if (found) {
+        hydrateSavedItineraryState(found);
+        setCurrentView('edit-saved');
+        return;
+      }
+      setCurrentView('saved-itineraries');
+    } catch {
+      setCurrentView('saved-itineraries');
+    }
+  };
+
   const handleStartPlanning = () => {
     if (!isAuthenticated) {
       setShowAuthPrompt(true);
@@ -387,6 +404,12 @@ export default function App() {
     <>
       {isAuthenticated && (
         <>
+          {!mobile && (
+            <CollaborationNotifications
+              isAuthenticated={isAuthenticated}
+              onOpenItinerary={handleOpenCollaborativeItinerary}
+            />
+          )}
           {!mobile && (
             <div className="hidden items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 sm:flex">
               {currentUser?.name || currentUser?.email || 'Signed in'}
@@ -852,6 +875,7 @@ export default function App() {
           <EditableItineraryView
             savedItinerary={viewingSavedItinerary}
             allDestinations={allDestinations}
+            currentUserId={currentUser?.id}
             onBack={() => setCurrentView('saved-itineraries')}
             onSaveChangesSuccess={(savedItinerary) => {
               trackEvent('saved_itinerary_updated', {

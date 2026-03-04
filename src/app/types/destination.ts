@@ -26,6 +26,7 @@ export interface UserPreferences {
   duration: number; // days
   travelStyle: string[];
   collaborators?: string[];
+  collaboratorIds?: string[];
 }
 
 export interface ItineraryItem {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import { Checkbox } from '@/app/components/ui/checkbox';
@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/app/components/ui/label';
 import { Input } from '@/app/components/ui/input';
 import { UserPreferences } from '@/app/types/destination';
-import { searchUsers } from '@/app/api/users';
+import { searchUsers, type UserSearchResult } from '@/app/api/users';
 import { GeoPoint } from '@/app/utils/travel';
 import { Mountain, Waves, Heart, Compass, ChevronDown, ChevronUp, Sun, LucideBook, Ship, Camera, LocateFixed, Sunrise, MoonStar, Clock3 } from 'lucide-react';
 
@@ -14,6 +14,12 @@ interface PreferenceFormProps {
   onSubmit: (preferences: UserPreferences) => void | Promise<void>;
   onLocationChange?: (location: GeoPoint | null) => void;
 }
+
+type CollaboratorSelection = {
+  id?: string;
+  label: string;
+  secondary?: string;
+};
 
 // Define sub-interests for each main interest
 const interestOptionsWithSubs = [
@@ -128,9 +134,9 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
   const [budget, setBudget] = useState<string>('1000');
   const [duration, setDuration] = useState<string>('');
   const [travelStyle, setTravelStyle] = useState<string[]>(['solo']);
-  const [collaborators, setCollaborators] = useState<string[]>([]);
+  const [collaborators, setCollaborators] = useState<CollaboratorSelection[]>([]);
   const [collaboratorQuery, setCollaboratorQuery] = useState('');
-  const [collaboratorSuggestions, setCollaboratorSuggestions] = useState<string[]>([]);
+  const [collaboratorSuggestions, setCollaboratorSuggestions] = useState<UserSearchResult[]>([]);
   const [isSearchingCollaborators, setIsSearchingCollaborators] = useState(false);
   const [showInterestError, setShowInterestError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -146,7 +152,10 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
   const collaboratorLimit = selectedTravelStyle === 'couple' ? 1
     : selectedTravelStyle === 'family_group' ? Number.POSITIVE_INFINITY
     : 0;
-  const completedCollaborators = collaborators.filter(name => name.trim() !== '');
+  const completedCollaborators = useMemo(
+    () => collaborators.filter((item) => item.label.trim() !== ''),
+    [collaborators]
+  );
   const canAddMoreCollaborators =
     collaboratorLimit === 0
       ? false
@@ -202,9 +211,9 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
     const nextStyle = selectedTravelStyle === style ? 'solo' : style;
     setTravelStyle([nextStyle]);
     if (nextStyle === 'couple') {
-      setCollaborators(prev => prev.filter(name => name.trim() !== '').slice(0, 1));
+      setCollaborators(prev => prev.filter((item) => item.label.trim() !== '').slice(0, 1));
     } else if (nextStyle === 'family_group') {
-      setCollaborators(prev => prev.filter(name => name.trim() !== ''));
+      setCollaborators(prev => prev.filter((item) => item.label.trim() !== ''));
     } else {
       setCollaborators([]);
     }
@@ -212,19 +221,28 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
     setCollaboratorSuggestions([]);
   };
 
-  const addCollaborator = (value: string) => {
-    const normalized = value.trim();
-    if (!normalized || !canAddMoreCollaborators) return;
-    const exists = completedCollaborators.some(
-      (collaborator) => collaborator.toLowerCase() === normalized.toLowerCase()
-    );
+  const addCollaborator = (value: string | UserSearchResult) => {
+    const draft: CollaboratorSelection = typeof value === 'string'
+      ? { label: value.trim() }
+      : {
+          id: value.id?.trim() || undefined,
+          label: value.label.trim(),
+          secondary: value.secondary,
+        };
+    if (!draft.label || !canAddMoreCollaborators) return;
+    const exists = completedCollaborators.some((collaborator) => {
+      if (collaborator.id && draft.id) {
+        return collaborator.id === draft.id;
+      }
+      return collaborator.label.toLowerCase() === draft.label.toLowerCase();
+    });
     if (exists) {
       setCollaboratorQuery('');
       setCollaboratorSuggestions([]);
       return;
     }
     setCollaborators((prev) => {
-      const next = [...prev, normalized];
+      const next = [...prev, draft];
       if (selectedTravelStyle === 'couple') {
         return next.slice(0, 1);
       }
@@ -234,8 +252,13 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
     setCollaboratorSuggestions([]);
   };
 
-  const removeCollaborator = (value: string) => {
-    setCollaborators((prev) => prev.filter((collaborator) => collaborator !== value));
+  const removeCollaborator = (target: CollaboratorSelection) => {
+    setCollaborators((prev) => prev.filter((collaborator) => {
+      if (collaborator.id && target.id) {
+        return collaborator.id !== target.id;
+      }
+      return collaborator.label !== target.label;
+    }));
   };
 
   useEffect(() => {
@@ -257,8 +280,18 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
       void searchUsers(query)
         .then((results) => {
           if (cancelled) return;
-          const selected = new Set(completedCollaborators.map((name) => name.toLowerCase()));
-          setCollaboratorSuggestions(results.filter((name) => !selected.has(name.toLowerCase())));
+          const selectedIds = new Set(
+            completedCollaborators
+              .map((item) => item.id)
+              .filter((id): id is string => Boolean(id))
+          );
+          const selectedLabels = new Set(completedCollaborators.map((item) => item.label.toLowerCase()));
+          setCollaboratorSuggestions(
+            results.filter((item) => {
+              if (item.id && selectedIds.has(item.id)) return false;
+              return !selectedLabels.has(item.label.toLowerCase());
+            })
+          );
         })
         .finally(() => {
           if (cancelled) return;
@@ -316,6 +349,12 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
       setIsSubmitting(false);
       return;
     }
+
+    if (collaboratorLimit > 0 && completedCollaborators.length === 0) {
+      setSubmitError('Please add at least one collaborator for this travel style.');
+      setIsSubmitting(false);
+      return;
+    }
     
     try {
       const autoRankedMainInterests = mainInterestOrder
@@ -326,6 +365,10 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
         acc[interestId] = index + 1;
         return acc;
       }, {});
+      const collaboratorLabels = completedCollaborators.map((item) => item.label);
+      const collaboratorIds = completedCollaborators
+        .map((item) => item.id)
+        .filter((id): id is string => Boolean(id));
 
       await onSubmit({
         interests,
@@ -335,7 +378,8 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
         budget: budgetNum,
         duration: durationNum,
         travelStyle,
-        collaborators: completedCollaborators,
+        collaborators: collaboratorLabels,
+        ...(collaboratorIds.length > 0 ? { collaboratorIds } : {}),
       });
     } catch (error) {
       console.error('Failed to submit preferences:', error);
@@ -540,15 +584,15 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
                 <div className="flex flex-wrap gap-2">
                   {completedCollaborators.map((collaborator) => (
                     <span
-                      key={collaborator}
+                      key={`${collaborator.id ?? collaborator.label}`}
                       className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700"
                     >
-                      @{collaborator}
+                      @{collaborator.label}
                       <button
                         type="button"
                         onClick={() => removeCollaborator(collaborator)}
                         className="text-blue-600 hover:text-blue-800"
-                        aria-label={`Remove ${collaborator}`}
+                        aria-label={`Remove ${collaborator.label}`}
                       >
                         ×
                       </button>
@@ -582,13 +626,14 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
                   <div className="flex flex-wrap gap-2">
                     {collaboratorSuggestions.map((suggestion) => (
                       <button
-                        key={suggestion}
+                        key={`${suggestion.id ?? suggestion.label}`}
                         type="button"
                         onClick={() => addCollaborator(suggestion)}
                         className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:border-blue-400 hover:text-blue-700"
                         disabled={!canAddMoreCollaborators}
+                        title={suggestion.secondary}
                       >
-                        @{suggestion}
+                        @{suggestion.label}
                       </button>
                     ))}
                   </div>

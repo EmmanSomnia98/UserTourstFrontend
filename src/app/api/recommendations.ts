@@ -37,6 +37,18 @@ type RecommendationsPayload =
       algorithmVersion?: string;
     };
 
+function isAuthFailure(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('(401)') ||
+    normalized.includes('(403)') ||
+    normalized.includes('no token provided') ||
+    normalized.includes('unauthorized') ||
+    normalized.includes('forbidden')
+  );
+}
+
 export type ServerRecommendationsResult = {
   destinations: Destination[];
   scores: Map<string, number>;
@@ -103,26 +115,25 @@ export async function fetchServerRecommendations(
   limit = 6,
   allDestinations: Destination[] = []
 ): Promise<ServerRecommendationsResult> {
-  const requestBody = {
-    maxBudget: Math.max(1, Math.round(preferences.budget * Math.max(1, preferences.duration))),
-    days: Math.max(1, Math.floor(preferences.duration)),
-  };
+  const maxBudget = Math.max(1, Math.round(preferences.budget * Math.max(1, preferences.duration)));
+  const days = Math.max(1, Math.floor(preferences.duration));
   const hasBudget = Number.isFinite(preferences.budget) && preferences.budget > 0;
-  const legacyConstrainedBody = {
+  const constrainedBody = {
     budgetMode: 'constrained' as const,
-    maxBudget: requestBody.maxBudget,
-    days: requestBody.days,
+    maxBudget,
+    days,
   };
-  const legacyUnconstrainedBody = {
+  const unconstrainedBody = {
     budgetMode: 'unconstrained' as const,
-    days: requestBody.days,
+    days,
   };
 
+  // Backend requires `budgetMode`; keep retries compatible without sending known-invalid payloads.
   const requestCandidates = [
-    requestBody,
-    hasBudget ? legacyConstrainedBody : legacyUnconstrainedBody,
-    { maxBudget: requestBody.maxBudget },
-    { maxBudget: requestBody.maxBudget, days: requestBody.days, budgetMode: hasBudget ? 'constrained' : 'unconstrained' },
+    hasBudget ? constrainedBody : unconstrainedBody,
+    { budgetMode: hasBudget ? 'constrained' : 'unconstrained', maxBudget, days },
+    { budgetMode: hasBudget ? 'constrained' : 'unconstrained', days },
+    ...(hasBudget ? [{ budgetMode: 'constrained' as const, maxBudget }] : []),
   ];
 
   let payload: RecommendationsPayload | null = null;
@@ -133,6 +144,9 @@ export async function fetchServerRecommendations(
       break;
     } catch (error) {
       lastError = error;
+      if (isAuthFailure(error)) {
+        break;
+      }
     }
   }
 
