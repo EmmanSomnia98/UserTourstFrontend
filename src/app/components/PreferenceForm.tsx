@@ -649,6 +649,9 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
             <p className="text-sm text-gray-600">
               Add collaborators by username or email. You can still type manually and press Enter.
             </p>
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Invite is sent later in <span className="font-semibold">Edit Itinerary</span> after the itinerary is created.
+            </div>
           </div>
         )}
 
