@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from '@/app/api/client';
+import { apiDelete, apiGet, apiPost } from '@/app/api/client';
 
 type RatingItem = {
   destinationId?: unknown;
@@ -62,4 +62,8 @@ export async function upsertDestinationRating(
     rating: normalizedRating,
     updatedAt,
   };
+}
+
+export async function clearDestinationRating(destinationId: string): Promise<void> {
+  await apiDelete(`/api/destinations/${encodeURIComponent(destinationId)}/rating`);
 }

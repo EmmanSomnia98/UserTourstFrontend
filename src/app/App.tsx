@@ -4,7 +4,7 @@ import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { fetchDestinations } from '@/app/api/destinations';
 import { fetchServerRecommendations } from '@/app/api/recommendations';
 import { fetchItineraries } from '@/app/api/itineraries';
-import { fetchMyDestinationRatings, upsertDestinationRating } from '@/app/api/ratings';
+import { clearDestinationRating, fetchMyDestinationRatings, upsertDestinationRating } from '@/app/api/ratings';
 import { AUTH_CHANGE_EVENT, clearAuthSession, getAuthToken, getAuthUser } from '@/app/api/client';
 import { type AuthUser } from '@/app/api/auth';
 import { buildFeedbackEvent, flushFeedbackQueue, recordFeedbackEvent } from '@/app/api/feedback';
@@ -18,6 +18,7 @@ import { RecommendationsView } from '@/app/components/RecommendationsView';
 import { ItineraryView } from '@/app/components/ItineraryView';
 import { SavedItinerariesView } from '@/app/components/SavedItinerariesView';
 import { EditableItineraryView } from '@/app/components/EditableItineraryView';
+import { AllDestinationsView } from '@/app/components/AllDestinationsView';
 import { CollaborationNotifications } from '@/app/components/CollaborationNotifications';
 import { Button } from '@/app/components/ui/button';
 import {
@@ -28,7 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/app/components/ui/dialog';
-import { MapPin, Sparkles, BookOpen, Menu } from 'lucide-react';
+import { MapPin, Sparkles, BookOpen, Menu, LocateFixed, ChevronLeft, ChevronRight } from 'lucide-react';
 import backgroundImage from '@/assets/bulusan-lake.jpg';
 
 type AppView =
@@ -39,6 +40,7 @@ type AppView =
   | 'itinerary'
   | 'saved-itineraries'
   | 'edit-saved'
+  | 'all-destinations'
   | 'recommendations';
 
 const DESTINATION_RATINGS_STORAGE_PREFIX = 'bw_destination_ratings_v1';
@@ -87,8 +89,20 @@ export default function App() {
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [logoutStep, setLogoutStep] = useState<'confirm' | 'thanks'>('confirm');
   const [userLocation, setUserLocation] = useState<GeoPoint | null>(null);
-  const heroDestinations = allDestinations.slice(0, 3);
-  const showHeroGrid = heroDestinations.length === 3;
+  const [heroStartIndex, setHeroStartIndex] = useState(0);
+  const [isHeroTransitioning, setIsHeroTransitioning] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<
+    'idle' | 'requesting' | 'granted' | 'denied' | 'unavailable' | 'error'
+  >('idle');
+  const heroVisibleCount = Math.min(3, allDestinations.length);
+  const heroDestinations =
+    heroVisibleCount === 0
+      ? []
+      : Array.from({ length: heroVisibleCount }, (_, offset) => {
+          const index = (heroStartIndex + offset) % allDestinations.length;
+          return allDestinations[index];
+        });
+  const showHeroGrid = heroDestinations.length > 0;
   const feedbackIdentity = {
     userId: currentUser?.id,
     userEmail: currentUser?.email,
@@ -147,6 +161,16 @@ export default function App() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (allDestinations.length === 0) {
+      setHeroStartIndex(0);
+      return;
+    }
+    if (heroStartIndex >= allDestinations.length) {
+      setHeroStartIndex(0);
+    }
+  }, [allDestinations.length, heroStartIndex]);
 
   useEffect(() => {
     void flushFeedbackQueue();
@@ -381,10 +405,16 @@ export default function App() {
         },
       });
 
-      if (isAuthenticated && nextRating > 0) {
-        void upsertDestinationRating(destination.id, nextRating).catch((error) => {
-          console.error('Failed to sync destination rating:', error);
-        });
+      if (isAuthenticated) {
+        if (nextRating > 0) {
+          void upsertDestinationRating(destination.id, nextRating).catch((error) => {
+            console.error('Failed to sync destination rating:', error);
+          });
+        } else {
+          void clearDestinationRating(destination.id).catch((error) => {
+            console.error('Failed to clear destination rating:', error);
+          });
+        }
       }
       return next;
     });
@@ -456,6 +486,50 @@ export default function App() {
     }
   };
 
+  const handleAllowLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationStatus('unavailable');
+      setUserLocation(null);
+      return;
+    }
+
+    setLocationStatus('requesting');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setLocationStatus('granted');
+      },
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) {
+          setLocationStatus('denied');
+          setUserLocation(null);
+          return;
+        }
+        setLocationStatus('error');
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10_000,
+        maximumAge: 300_000,
+      }
+    );
+  };
+
+  const rotateHero = (delta: -1 | 1) => {
+    if (allDestinations.length === 0 || isHeroTransitioning) return;
+    setIsHeroTransitioning(true);
+    window.setTimeout(() => {
+      setHeroStartIndex((prev) => (prev + delta + allDestinations.length) % allDestinations.length);
+      setIsHeroTransitioning(false);
+    }, 140);
+  };
+
+  const handleHeroPrevious = () => rotateHero(-1);
+  const handleHeroNext = () => rotateHero(1);
+
   const handleStartPlanning = () => {
     if (!isAuthenticated) {
       setShowAuthPrompt(true);
@@ -493,144 +567,59 @@ export default function App() {
     setCurrentView(view);
     setIsMobileNavOpen(false);
   };
-  const renderHeaderActions = (mobile: boolean) => (
+  const renderDrawerActions = () => (
     <>
-      {isAuthenticated && (
+      {isAuthenticated ? (
         <>
-          {!mobile && (
-            <CollaborationNotifications
-              isAuthenticated={isAuthenticated}
-              onOpenItinerary={handleOpenCollaborativeItinerary}
-            />
-          )}
-          {!mobile && (
-            <div className="hidden items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 sm:flex">
-              {currentUser?.name || currentUser?.email || 'Signed in'}
-            </div>
-          )}
+          <div className="rounded-md bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
+            {currentUser?.name || currentUser?.email || 'Signed in'}
+          </div>
           <Button
             variant="outline"
-            className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
+            className={mobileActionButtonClass}
+            onClick={() => handleMobileNavigate('all-destinations')}
+          >
+            View All Destination
+          </Button>
+          <Button
+            variant="outline"
+            className={mobileActionButtonClass}
+            onClick={() => handleMobileNavigate('saved-itineraries')}
+          >
+            <BookOpen className="w-4 h-4 mr-2" />
+            View My Itineraries
+          </Button>
+          <Button
+            variant="outline"
+            className={mobileActionButtonClass}
             onClick={handleLogoutAttempt}
           >
             Log out
           </Button>
         </>
-      )}
-      {currentView === 'welcome' && (
+      ) : (
         <>
-          {!isAuthenticated && (
-            <>
-              <Button
-                className={`${mobile ? mobileActionButtonClass : desktopActionButtonClass} bg-emerald-600 text-white hover:bg-emerald-700`}
-                onClick={() => {
-                  if (mobile) {
-                    handleMobileNavigate('user-signup');
-                    return;
-                  }
-                  setCurrentView('user-signup');
-                }}
-              >
-                Sign Up
-              </Button>
-              <Button
-                variant="outline"
-                className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
-                onClick={() => {
-                  if (mobile) {
-                    handleMobileNavigate('user-login');
-                    return;
-                  }
-                  setCurrentView('user-login');
-                }}
-              >
-                Sign In
-              </Button>
-            </>
-          )}
+          <Button
+            className={`${mobileActionButtonClass} bg-emerald-600 text-white hover:bg-emerald-700`}
+            onClick={() => handleMobileNavigate('user-signup')}
+          >
+            Sign Up
+          </Button>
           <Button
             variant="outline"
-            className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
-            disabled={!isAuthenticated}
-            title={!isAuthenticated ? 'Sign in or sign up to view your itineraries.' : undefined}
-            onClick={() => {
-              if (mobile) {
-                handleMobileNavigate('saved-itineraries');
-                return;
-              }
-              setCurrentView('saved-itineraries');
-            }}
+            className={mobileActionButtonClass}
+            onClick={() => handleMobileNavigate('user-login')}
           >
-            <BookOpen className="w-4 h-4 mr-2" />
-            View My Itineraries
+            Sign In
+          </Button>
+          <Button
+            variant="outline"
+            className={mobileActionButtonClass}
+            onClick={() => handleMobileNavigate('all-destinations')}
+          >
+            View All Destination
           </Button>
         </>
-      )}
-      {currentView === 'itinerary' && (
-        <Button
-          variant="outline"
-          className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
-          disabled={!isAuthenticated}
-          title={!isAuthenticated ? 'Sign in or sign up to view your itineraries.' : undefined}
-          onClick={() => {
-            if (mobile) {
-              handleMobileNavigate('saved-itineraries');
-              return;
-            }
-            setCurrentView('saved-itineraries');
-          }}
-        >
-          <BookOpen className="w-4 h-4 mr-2" />
-          View My Itineraries
-        </Button>
-      )}
-      {currentView === 'edit-saved' && (
-        <Button
-          variant="outline"
-          className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
-          disabled={!isAuthenticated}
-          title={!isAuthenticated ? 'Sign in or sign up to view your itineraries.' : undefined}
-          onClick={() => {
-            if (mobile) {
-              handleMobileNavigate('saved-itineraries');
-              return;
-            }
-            setCurrentView('saved-itineraries');
-          }}
-        >
-          <BookOpen className="w-4 h-4 mr-2" />
-          Back to My Itineraries
-        </Button>
-      )}
-      {currentView === 'user-login' && (
-        <Button
-          variant="outline"
-          className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
-          onClick={() => {
-            if (mobile) {
-              handleMobileNavigate('welcome');
-              return;
-            }
-            setCurrentView('welcome');
-          }}
-        >
-          Back to Home
-        </Button>
-      )}
-      {currentView === 'user-signup' && (
-        <Button
-          variant="outline"
-          className={mobile ? mobileActionButtonClass : desktopActionButtonClass}
-          onClick={() => {
-            if (mobile) {
-              handleMobileNavigate('welcome');
-              return;
-            }
-            setCurrentView('welcome');
-          }}
-        >
-          Back to Home
-        </Button>
       )}
     </>
   );
@@ -657,10 +646,33 @@ export default function App() {
                 <p className="text-sm text-gray-600">Personalized Itinerary Planner</p>
               </div>
             </div>
-            <div className="hidden sm:flex flex-wrap items-center gap-2 sm:justify-end">
-              {renderHeaderActions(false)}
-            </div>
-            <div className="sm:hidden">
+            <div className="flex items-center gap-2">
+              <Button
+                variant={locationStatus === 'granted' ? 'secondary' : 'outline'}
+                className={desktopActionButtonClass}
+                onClick={handleAllowLocation}
+                disabled={locationStatus === 'requesting'}
+                title={
+                  locationStatus === 'denied'
+                    ? 'Location denied. Allow location in browser settings and try again.'
+                    : locationStatus === 'unavailable'
+                      ? 'Location is not supported by this browser/device.'
+                      : undefined
+                }
+              >
+                <LocateFixed className="w-4 h-4 sm:mr-2" />
+                <span className="hidden sm:inline">
+                  {locationStatus === 'requesting'
+                    ? 'Requesting...'
+                    : locationStatus === 'granted'
+                      ? 'Location On'
+                      : 'Allow Location'}
+                </span>
+              </Button>
+              <CollaborationNotifications
+                isAuthenticated={isAuthenticated}
+                onOpenItinerary={handleOpenCollaborativeItinerary}
+              />
               <Button
                 variant="outline"
                 size="icon"
@@ -675,24 +687,19 @@ export default function App() {
       </header>
 
       {isMobileNavOpen && (
-        <div className="fixed inset-0 z-50 sm:hidden" aria-label="Mobile navigation drawer">
+        <div className="fixed inset-0 z-50" aria-label="Navigation drawer">
           <button
             className="absolute inset-0 bg-black/40"
             onClick={() => setIsMobileNavOpen(false)}
             aria-label="Close navigation menu"
           />
-          <aside className="absolute right-0 top-0 h-full w-[85%] max-w-xs bg-white shadow-xl border-l p-4">
+          <aside className="absolute right-0 top-0 h-full w-[85%] max-w-sm bg-white shadow-xl border-l p-4">
             <div className="mb-4">
               <h2 className="text-base font-semibold text-slate-900">Navigation</h2>
               <p className="text-xs text-slate-600 mt-1">Quick actions and account navigation.</p>
             </div>
             <div className="space-y-2">
-              {isAuthenticated && (
-                <div className="rounded-md bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
-                  {currentUser?.name || currentUser?.email || 'Signed in'}
-                </div>
-              )}
-              {renderHeaderActions(true)}
+              {renderDrawerActions()}
             </div>
           </aside>
         </div>
@@ -769,19 +776,49 @@ export default function App() {
             )}
 
             {showHeroGrid ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
-                {heroDestinations.map((destination, index) => (
-                  <div key={destination.id ?? `${destination.name}-${index}`} className="relative h-64 rounded-lg overflow-hidden shadow-lg">
-                    <img
-                      src={destination.image}
-                      alt={destination.name}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-                      <p className="text-white font-semibold">{destination.name}</p>
+              <div className="relative max-w-5xl mx-auto">
+                <div
+                  className={`grid grid-cols-1 md:grid-cols-3 gap-4 transition-opacity duration-300 ${
+                    isHeroTransitioning ? 'opacity-0' : 'opacity-100'
+                  }`}
+                >
+                  {heroDestinations.map((destination, index) => (
+                    <div key={destination.id ?? `${destination.name}-${index}`} className="relative h-64 rounded-lg overflow-hidden shadow-lg">
+                      <img
+                        src={destination.image}
+                        alt={destination.name}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
+                        <p className="text-white font-semibold">{destination.name}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+                {allDestinations.length > heroVisibleCount && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute -left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/95 shadow-md"
+                      aria-label="Previous destination"
+                      onClick={handleHeroPrevious}
+                      disabled={isHeroTransitioning}
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="absolute -right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/95 shadow-md"
+                      aria-label="Next destination"
+                      onClick={handleHeroNext}
+                      disabled={isHeroTransitioning}
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </Button>
+                  </>
+                )}
               </div>
             ) : (
               <div className="max-w-5xl mx-auto">
@@ -965,6 +1002,15 @@ export default function App() {
             onDeleteItinerarySuccess={(itineraryId) => {
               trackEvent('saved_itinerary_deleted', { itineraryId });
             }}
+          />
+        )}
+
+        {currentView === 'all-destinations' && (
+          <AllDestinationsView
+            destinations={allDestinations}
+            status={destinationsStatus}
+            userLocation={userLocation}
+            onBack={() => setCurrentView('welcome')}
           />
         )}
 
