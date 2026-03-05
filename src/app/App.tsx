@@ -261,22 +261,18 @@ export default function App() {
     // Target 2-3 destinations/day when inventory allows.
     const minPerDay = 2;
     const maxPerDay = 3;
-    const minTarget = prefs.duration * minPerDay;
-    const maxTarget = prefs.duration * maxPerDay;
-    const desiredTarget = Math.max(uniqueRecommended.length, minTarget);
-    const boundedTarget =
-      uniqueRecommended.length > maxTarget
-        ? uniqueRecommended.length
-        : Math.min(desiredTarget, maxTarget);
+    const minTarget = Math.max(prefs.duration, prefs.duration * minPerDay);
+    const maxTarget = Math.max(minTarget, prefs.duration * maxPerDay);
+    const recommendedTarget = uniqueRecommended.length > 0 ? uniqueRecommended.length : minTarget;
     const targetCount = Math.min(
       allDestinations.length,
-      Math.max(prefs.duration, boundedTarget)
+      Math.min(maxTarget, Math.max(minTarget, recommendedTarget))
     );
     const backfill = [...allDestinations]
       .filter((destination) => !seenIds.has(destination.id))
       .sort((a, b) => calculateContentScore(b, prefs) - calculateContentScore(a, prefs));
 
-    const itinerarySeed = [...uniqueRecommended];
+    const itinerarySeed = uniqueRecommended.slice(0, targetCount);
     for (const candidate of backfill) {
       if (itinerarySeed.length >= targetCount) break;
       itinerarySeed.push(candidate);
@@ -778,12 +774,15 @@ export default function App() {
             {showHeroGrid ? (
               <div className="relative max-w-5xl mx-auto">
                 <div
-                  className={`grid grid-cols-1 md:grid-cols-3 gap-4 transition-opacity duration-300 ${
+                  className={`flex gap-4 overflow-x-auto pb-1 md:grid md:grid-cols-3 md:overflow-visible md:pb-0 transition-opacity duration-300 ${
                     isHeroTransitioning ? 'opacity-0' : 'opacity-100'
                   }`}
                 >
                   {heroDestinations.map((destination, index) => (
-                    <div key={destination.id ?? `${destination.name}-${index}`} className="relative h-64 rounded-lg overflow-hidden shadow-lg">
+                    <div
+                      key={destination.id ?? `${destination.name}-${index}`}
+                      className="relative h-56 min-w-[260px] rounded-lg overflow-hidden shadow-lg md:h-64 md:min-w-0"
+                    >
                       <img
                         src={destination.image}
                         alt={destination.name}

@@ -177,6 +177,7 @@ export async function fetchServerRecommendations(
 
   const destinations: Destination[] = [];
   const scores = new Map<string, number>();
+  const seenDestinationIds = new Set<string>();
   const destinationById = new Map(allDestinations.map((item) => [item.id, item]));
   const destinationByName = new Map(
     allDestinations
@@ -202,7 +203,11 @@ export async function fetchServerRecommendations(
       unmappedCount += 1;
       return;
     }
+    if (seenDestinationIds.has(mapped.id)) {
+      return;
+    }
     destinations.push(mapped);
+    seenDestinationIds.add(mapped.id);
 
     const score = extractScore(item);
     if (score !== null) {
@@ -253,5 +258,15 @@ export async function fetchServerRecommendations(
     );
   }
 
-  return { destinations, scores, metadata };
+  const effectiveLimit = Math.max(1, Math.min(limit, allDestinations.length || limit));
+  const limitedDestinations = destinations.slice(0, effectiveLimit);
+  const limitedScores = new Map<string, number>();
+  limitedDestinations.forEach((destination) => {
+    const score = scores.get(destination.id);
+    if (score !== undefined) {
+      limitedScores.set(destination.id, score);
+    }
+  });
+
+  return { destinations: limitedDestinations, scores: limitedScores, metadata };
 }
