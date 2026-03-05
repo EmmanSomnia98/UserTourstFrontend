@@ -11,6 +11,7 @@ const FEEDBACK_BATCH_ENDPOINT =
 export type FeedbackEventType =
   | 'recommendation_requested'
   | 'recommendation_impression'
+  | 'destination_rated'
   | 'destination_added'
   | 'destination_removed'
   | 'itinerary_saved'

@@ -7,7 +7,7 @@ import { Badge } from '@/app/components/ui/badge';
 import { Separator } from '@/app/components/ui/separator';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
-import { Calendar, Clock, Trash2, Plus, Save, X, Edit2, Wallet } from 'lucide-react';
+import { Calendar, Clock, Trash2, Plus, Save, X, Edit2, Wallet, Star } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { createItinerary, deleteRemoteItinerary } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
@@ -20,6 +20,8 @@ interface EditableItineraryViewProps {
   allDestinations: Destination[];
   currentUserId?: string;
   userLocation?: GeoPoint | null;
+  onRateDestination?: (destination: Destination, rating: number) => void;
+  destinationRatings?: Record<string, number>;
   onBack: () => void;
   onUpdate: () => void;
   onSaveChangesSuccess?: (savedItinerary: SavedItinerary) => void;
@@ -31,6 +33,8 @@ export function EditableItineraryView({
   allDestinations,
   currentUserId,
   userLocation,
+  onRateDestination,
+  destinationRatings,
   onBack,
   onUpdate,
   onSaveChangesSuccess,
@@ -219,6 +223,17 @@ export function EditableItineraryView({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const formatDescriptionLines = (description: string): string[] => {
+    return description
+      .replace(/\r\n?/g, '\n')
+      .replace(/\s*[•●◦▪]\s*/g, '\n• ')
+      .replace(/\s*\|\s*/g, '\n')
+      .replace(/\n{2,}/g, '\n')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
   };
 
   return (
@@ -461,6 +476,35 @@ export function EditableItineraryView({
                               </div>
                             </div>
                           <TravelModeBadges destination={dest} origin={userLocation} />
+                          {onRateDestination && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-slate-600">Your rating</p>
+                              <div className="flex items-center gap-1">
+                                {Array.from({ length: 5 }, (_, starIndex) => {
+                                  const value = starIndex + 1;
+                                  const active = value <= (destinationRatings?.[dest.id] ?? 0);
+                                  return (
+                                    <button
+                                      key={`${dest.id}-edit-rate-${value}`}
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        onRateDestination(dest, value);
+                                      }}
+                                      className="rounded-sm p-0.5 transition hover:scale-110"
+                                      aria-label={`Rate ${dest.name} ${value} star${value > 1 ? 's' : ''}`}
+                                      title={`Rate ${value} star${value > 1 ? 's' : ''}`}
+                                    >
+                                      <Star className={`h-4 w-4 ${active ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
+                                    </button>
+                                  );
+                                })}
+                                <span className="ml-1 text-xs text-slate-500">
+                                  {destinationRatings?.[dest.id] ? `${destinationRatings[dest.id]}/5` : 'Not rated'}
+                                </span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -556,7 +600,13 @@ export function EditableItineraryView({
                   alt={selectedDestination.name}
                   className="w-full h-56 sm:h-72 object-cover rounded-lg"
                 />
-                <p className="text-sm text-gray-700">{selectedDestination.description}</p>
+                <div className="max-h-56 space-y-2 overflow-y-auto pr-1 text-sm text-gray-700">
+                  {formatDescriptionLines(selectedDestination.description).map((line, index) => (
+                    <p key={`${selectedDestination.id}-desc-${index}`} className="leading-relaxed">
+                      {line}
+                    </p>
+                  ))}
+                </div>
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="secondary">{selectedDestination.type}</Badge>
                   <Badge variant="outline">{selectedDestination.difficulty}</Badge>

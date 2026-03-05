@@ -14,9 +14,11 @@ interface RecommendationsViewProps {
   preferences: UserPreferences;
   itinerary: Destination[];
   onAddToItinerary: (destination: Destination) => void;
+  onRateDestination?: (destination: Destination, rating: number) => void;
   onViewItinerary: () => void;
   onRestart: () => void;
   recommendationScores?: Map<string, number>;
+  destinationRatings?: Record<string, number>;
   userLocation?: GeoPoint | null;
 }
 
@@ -26,9 +28,11 @@ export function RecommendationsView({
   preferences,
   itinerary,
   onAddToItinerary,
+  onRateDestination,
   onViewItinerary,
   onRestart,
   recommendationScores,
+  destinationRatings,
   userLocation
 }: RecommendationsViewProps) {
   const otherDestinations = allDestinations.filter(
@@ -94,6 +98,8 @@ export function RecommendationsView({
               showRecommendationScore={true}
               recommendationScore={recommendationScores?.get(destination.id)}
               onShowBreakdown={() => setSelectedDestination(destination)}
+              userRating={destinationRatings?.[destination.id]}
+              onRateDestination={onRateDestination}
               userLocation={userLocation}
             />
           ))}
@@ -115,6 +121,8 @@ export function RecommendationsView({
                 destination={destination}
                 onAddToItinerary={onAddToItinerary}
                 isInItinerary={itinerary.some(item => item.id === destination.id)}
+                userRating={destinationRatings?.[destination.id]}
+                onRateDestination={onRateDestination}
                 userLocation={userLocation}
               />
             ))}

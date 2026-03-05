@@ -14,6 +14,8 @@ interface DestinationCardProps {
   showRecommendationScore?: boolean;
   recommendationScore?: number;
   onShowBreakdown?: (destination: Destination) => void;
+  onRateDestination?: (destination: Destination, rating: number) => void;
+  userRating?: number;
   userLocation?: GeoPoint | null;
 }
 
@@ -24,6 +26,8 @@ export function DestinationCard({
   showRecommendationScore = false,
   recommendationScore,
   onShowBreakdown,
+  onRateDestination,
+  userRating = 0,
   userLocation
 }: DestinationCardProps) {
   const difficultyColors = {
@@ -87,6 +91,33 @@ export function DestinationCard({
         </div>
 
         <TravelModeBadges destination={destination} origin={userLocation} />
+
+        {onRateDestination && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-slate-600">Your rating</p>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: 5 }, (_, index) => {
+                const value = index + 1;
+                const active = value <= userRating;
+                return (
+                  <button
+                    key={`${destination.id}-rate-${value}`}
+                    type="button"
+                    aria-label={`Rate ${destination.name} ${value} star${value > 1 ? 's' : ''}`}
+                    title={`Rate ${value} star${value > 1 ? 's' : ''}`}
+                    onClick={() => onRateDestination(destination, value)}
+                    className="rounded-sm p-0.5 transition hover:scale-110"
+                  >
+                    <Star className={`h-4 w-4 ${active ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
+                  </button>
+                );
+              })}
+              <span className="ml-1 text-xs text-slate-500">
+                {userRating > 0 ? `${userRating}/5` : 'Not rated'}
+              </span>
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-1">
           {destination.interests.slice(0, 3).map(interest => (

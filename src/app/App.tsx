@@ -4,6 +4,7 @@ import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { fetchDestinations } from '@/app/api/destinations';
 import { fetchServerRecommendations } from '@/app/api/recommendations';
 import { fetchItineraries } from '@/app/api/itineraries';
+import { fetchMyDestinationRatings, upsertDestinationRating } from '@/app/api/ratings';
 import { AUTH_CHANGE_EVENT, clearAuthSession, getAuthToken, getAuthUser } from '@/app/api/client';
 import { type AuthUser } from '@/app/api/auth';
 import { buildFeedbackEvent, flushFeedbackQueue, recordFeedbackEvent } from '@/app/api/feedback';
@@ -40,6 +41,32 @@ type AppView =
   | 'edit-saved'
   | 'recommendations';
 
+const DESTINATION_RATINGS_STORAGE_PREFIX = 'bw_destination_ratings_v1';
+
+function getDestinationRatingsStorageKey(user: AuthUser | null): string {
+  const identity = (user?.id || user?.email || 'guest').trim().toLowerCase();
+  return `${DESTINATION_RATINGS_STORAGE_PREFIX}:${identity}`;
+}
+
+function readDestinationRatings(key: string): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== 'object') return {};
+    const normalized: Record<string, number> = {};
+    Object.entries(parsed).forEach(([destinationId, rating]) => {
+      const value = typeof rating === 'number' ? Math.round(rating) : Number(rating);
+      if (Number.isFinite(value) && value >= 0 && value <= 5) {
+        normalized[destinationId] = value;
+      }
+    });
+    return normalized;
+  } catch {
+    return {};
+  }
+}
+
 export default function App() {
   const isMobile = useIsMobile();
   const [currentView, setCurrentView] = useState<AppView>('welcome');
@@ -55,6 +82,7 @@ export default function App() {
   const [viewingSavedItinerary, setViewingSavedItinerary] = useState<SavedItinerary | null>(null);
   const [lastRecommendationRequestId, setLastRecommendationRequestId] = useState<string | null>(null);
   const [lastRecommendationModelVersion, setLastRecommendationModelVersion] = useState<string | null>(null);
+  const [destinationRatings, setDestinationRatings] = useState<Record<string, number>>({});
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [logoutStep, setLogoutStep] = useState<'confirm' | 'thanks'>('confirm');
@@ -65,6 +93,7 @@ export default function App() {
     userId: currentUser?.id,
     userEmail: currentUser?.email,
   };
+  const destinationRatingsStorageKey = getDestinationRatingsStorageKey(currentUser);
 
   useEffect(() => {
     const storedToken = getAuthToken();
@@ -122,6 +151,34 @@ export default function App() {
   useEffect(() => {
     void flushFeedbackQueue();
   }, [currentUser?.id, currentUser?.email]);
+
+  useEffect(() => {
+    let active = true;
+    const localRatings = readDestinationRatings(destinationRatingsStorageKey);
+    setDestinationRatings(localRatings);
+
+    if (!isAuthenticated) return () => { active = false; };
+
+    void fetchMyDestinationRatings()
+      .then((serverRatings) => {
+        if (!active) return;
+        const merged = { ...serverRatings, ...localRatings };
+        setDestinationRatings(merged);
+        try {
+          localStorage.setItem(destinationRatingsStorageKey, JSON.stringify(merged));
+        } catch {
+          // Ignore storage failures.
+        }
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error('Failed to load destination ratings from server:', error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [destinationRatingsStorageKey, isAuthenticated]);
 
   const trackEvent = (
     eventType: Parameters<typeof buildFeedbackEvent>[0],
@@ -294,6 +351,42 @@ export default function App() {
         recommendationRequestId: lastRecommendationRequestId,
         modelVersion: lastRecommendationModelVersion,
       },
+    });
+  };
+
+  const handleRateDestination = (destination: Destination, rating: number) => {
+    const requestedRating = Math.max(1, Math.min(5, Math.round(rating)));
+    setDestinationRatings((prev) => {
+      const previousRating = prev[destination.id];
+      const nextRating = previousRating === requestedRating ? 0 : requestedRating;
+
+      const next = {
+        ...prev,
+        [destination.id]: nextRating,
+      };
+      try {
+        localStorage.setItem(destinationRatingsStorageKey, JSON.stringify(next));
+      } catch {
+        // Ignore storage failures.
+      }
+
+      trackEvent('destination_rated', {
+        destinationId: destination.id,
+        metadata: {
+          rating: nextRating,
+          cleared: nextRating === 0,
+          previousRating,
+          recommendationRequestId: lastRecommendationRequestId,
+          modelVersion: lastRecommendationModelVersion,
+        },
+      });
+
+      if (isAuthenticated && nextRating > 0) {
+        void upsertDestinationRating(destination.id, nextRating).catch((error) => {
+          console.error('Failed to sync destination rating:', error);
+        });
+      }
+      return next;
     });
   };
 
@@ -839,9 +932,11 @@ export default function App() {
             preferences={preferences}
             itinerary={itinerary}
             onAddToItinerary={handleAddToItinerary}
+            onRateDestination={handleRateDestination}
             onViewItinerary={handleViewItinerary}
             onRestart={handleReset}
             recommendationScores={recommendationScores}
+            destinationRatings={destinationRatings}
             userLocation={userLocation}
           />
         )}
@@ -856,6 +951,8 @@ export default function App() {
             onReset={handleReset}
             onViewSavedItineraries={() => setCurrentView('saved-itineraries')}
             onSaveSuccess={handleItinerarySaved}
+            onRateDestination={handleRateDestination}
+            destinationRatings={destinationRatings}
             userLocation={userLocation}
           />
         )}
@@ -877,6 +974,8 @@ export default function App() {
             allDestinations={allDestinations}
             currentUserId={currentUser?.id}
             userLocation={userLocation}
+            onRateDestination={handleRateDestination}
+            destinationRatings={destinationRatings}
             onBack={() => setCurrentView('saved-itineraries')}
             onSaveChangesSuccess={(savedItinerary) => {
               trackEvent('saved_itinerary_updated', {

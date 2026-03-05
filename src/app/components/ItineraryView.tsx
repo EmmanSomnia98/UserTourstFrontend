@@ -14,7 +14,7 @@ import {
 } from '@/app/components/ui/dialog';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { GeoPoint } from '@/app/utils/travel';
-import { Calendar, Trash2, Download, Share2, Wallet } from 'lucide-react';
+import { Calendar, Trash2, Download, Share2, Wallet, Star } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { createItinerary } from '@/app/api/itineraries';
@@ -29,6 +29,8 @@ interface ItineraryViewProps {
   onReset: () => void;
   onViewSavedItineraries?: () => void;
   onSaveSuccess?: (savedItinerary: SavedItinerary) => void;
+  onRateDestination?: (destination: Destination, rating: number) => void;
+  destinationRatings?: Record<string, number>;
   userLocation?: GeoPoint | null;
 }
 
@@ -41,6 +43,8 @@ export function ItineraryView({
   onReset,
   onViewSavedItineraries,
   onSaveSuccess,
+  onRateDestination,
+  destinationRatings,
   userLocation
 }: ItineraryViewProps) {
   const [isSaving, setIsSaving] = useState(false);
@@ -159,27 +163,85 @@ export function ItineraryView({
   };
 
   const handleDownload = () => {
-    // Create a simple text version of the itinerary
-    let itineraryText = `Bulusan Travel Itinerary\n\n`;
-    itineraryText += `Total Duration: ${tripDays} days\n`;
-    itineraryText += `Total Cost: ${formatPeso(totalCost)}\n`;
-    itineraryText += `Total Activity Hours: ${totalDuration}h\n\n`;
-    
-    schedule.forEach((dayDestinations, day) => {
-      itineraryText += `Day ${day}:\n`;
-      dayDestinations.forEach(dest => {
-        itineraryText += `  - ${dest.name} (${formatPeso(dest.estimatedCost)})\n`;
+    const toAscii = (value: string) => value.replace(/[^\x20-\x7E]/g, '');
+    const escapePdfText = (value: string) =>
+      value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+    const makePdfBlob = (lines: string[]): Blob => {
+      const lineHeight = 14;
+      const startY = 800;
+      const safeLines = lines.map((line) => toAscii(line));
+      const content = [
+        'BT',
+        '/F1 12 Tf',
+        `1 0 0 1 50 ${startY} Tm`,
+        `${lineHeight} TL`,
+        ...safeLines.map((line, index) =>
+          index === 0 ? `(${escapePdfText(line)}) Tj` : `T* (${escapePdfText(line)}) Tj`
+        ),
+        'ET',
+      ].join('\n');
+
+      const objects = [
+        '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
+        '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n',
+        '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n',
+        `4 0 obj\n<< /Length ${content.length} >>\nstream\n${content}\nendstream\nendobj\n`,
+        '5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n',
+      ];
+
+      let pdf = '%PDF-1.4\n';
+      const offsets: number[] = [0];
+      objects.forEach((obj) => {
+        offsets.push(pdf.length);
+        pdf += obj;
       });
-      itineraryText += `\n`;
+      const xrefStart = pdf.length;
+      pdf += `xref\n0 ${objects.length + 1}\n`;
+      pdf += '0000000000 65535 f \n';
+      for (let i = 1; i <= objects.length; i += 1) {
+        pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+      }
+      pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+      return new Blob([pdf], { type: 'application/pdf' });
+    };
+
+    const lines: string[] = [];
+    lines.push('Bulusan Travel Itinerary');
+    lines.push('');
+    lines.push(`Total Duration: ${tripDays} days`);
+    lines.push(`Total Cost: ${formatPeso(totalCost)}`);
+    lines.push(`Total Activity Hours: ${totalDuration}h`);
+    lines.push('');
+    schedule.forEach((dayDestinations, day) => {
+      lines.push(`Day ${day}:`);
+      if (dayDestinations.length === 0) {
+        lines.push('  - No activities scheduled');
+      } else {
+        dayDestinations.forEach((dest) => {
+          lines.push(`  - ${dest.name} (${formatPeso(dest.estimatedCost)})`);
+        });
+      }
+      lines.push('');
     });
 
-    const blob = new Blob([itineraryText], { type: 'text/plain' });
+    const blob = makePdfBlob(lines);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'bulusan-itinerary.txt';
+    a.download = 'bulusan-itinerary.pdf';
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const formatDescriptionLines = (description: string): string[] => {
+    return description
+      .replace(/\r\n?/g, '\n')
+      .replace(/\s*[•●◦▪]\s*/g, '\n• ')
+      .replace(/\s*\|\s*/g, '\n')
+      .replace(/\n{2,}/g, '\n')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
   };
 
   if (destinations.length === 0) {
@@ -312,6 +374,35 @@ export function ItineraryView({
                           <div className="pt-1">
                             <TravelModeBadges destination={dest} origin={userLocation} />
                           </div>
+                          {onRateDestination && (
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium text-slate-600">Your rating</p>
+                              <div className="flex items-center gap-1">
+                                {Array.from({ length: 5 }, (_, starIndex) => {
+                                  const value = starIndex + 1;
+                                  const active = value <= (destinationRatings?.[dest.id] ?? 0);
+                                  return (
+                                    <button
+                                      key={`${dest.id}-itn-rate-${value}`}
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        onRateDestination(dest, value);
+                                      }}
+                                      className="rounded-sm p-0.5 transition hover:scale-110"
+                                      aria-label={`Rate ${dest.name} ${value} star${value > 1 ? 's' : ''}`}
+                                      title={`Rate ${value} star${value > 1 ? 's' : ''}`}
+                                    >
+                                      <Star className={`h-4 w-4 ${active ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
+                                    </button>
+                                  );
+                                })}
+                                <span className="ml-1 text-xs text-slate-500">
+                                  {destinationRatings?.[dest.id] ? `${destinationRatings[dest.id]}/5` : 'Not rated'}
+                                </span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -461,7 +552,13 @@ export function ItineraryView({
                   alt={selectedDestination.name}
                   className="w-full h-56 sm:h-72 object-cover rounded-lg"
                 />
-                <p className="text-sm text-gray-700">{selectedDestination.description}</p>
+                <div className="max-h-56 space-y-2 overflow-y-auto pr-1 text-sm text-gray-700">
+                  {formatDescriptionLines(selectedDestination.description).map((line, index) => (
+                    <p key={`${selectedDestination.id}-desc-${index}`} className="leading-relaxed">
+                      {line}
+                    </p>
+                  ))}
+                </div>
                 <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
                   <span className="inline-flex items-center gap-1">
                     <Wallet className="w-4 h-4" />
