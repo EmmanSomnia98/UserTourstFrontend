@@ -28,6 +28,12 @@ type BackendItineraryDestination = {
       longitude?: number | string;
       coordinates?: [number, number];
     };
+    imageUrl?: string;
+    image_url?: string;
+    thumbnail?: string;
+    photo?: string;
+    photos?: string[] | Array<{ url?: string; secure_url?: string; path?: string }>;
+    images?: string[] | Array<{ url?: string; secure_url?: string; path?: string }>;
   };
   destinationId?: unknown;
   cost?: number;
@@ -79,12 +85,46 @@ function toDestinationList(items: BackendItineraryDestination[] | undefined): De
         destination.id ?? destination._id ?? destination.destinationId ?? item.destinationId
       );
       if (!normalizedId) return null;
+      const getImage = (): string => {
+        const normalizeText = (value: unknown): string =>
+          typeof value === 'string' ? value.trim() : '';
+        const objectWithUrl = (value: unknown): string => {
+          if (!value || typeof value !== 'object') return '';
+          const candidate = value as { url?: unknown; secure_url?: unknown; path?: unknown };
+          return (
+            normalizeText(candidate.url) ||
+            normalizeText(candidate.secure_url) ||
+            normalizeText(candidate.path)
+          );
+        };
+        const fromArray = (value: unknown): string => {
+          if (!Array.isArray(value) || value.length === 0) return '';
+          for (const entry of value) {
+            const asText = normalizeText(entry);
+            if (asText) return asText;
+            const asObject = objectWithUrl(entry);
+            if (asObject) return asObject;
+          }
+          return '';
+        };
+
+        return (
+          normalizeText(destination.image) ||
+          normalizeText(destination.imageUrl) ||
+          normalizeText(destination.image_url) ||
+          normalizeText(destination.thumbnail) ||
+          normalizeText(destination.photo) ||
+          fromArray(destination.images) ||
+          fromArray(destination.photos)
+        );
+      };
+
       return {
         ...(destination as Destination),
         id: normalizedId,
         duration: normalizeDuration(destination),
         location: normalizeLocation(destination),
-        image: resolveAssetUrl(destination.image),
+        image: resolveAssetUrl(getImage()),
       } as Destination;
     })
     .filter((dest): dest is Destination => Boolean(dest));

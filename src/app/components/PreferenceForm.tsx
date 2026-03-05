@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import { Checkbox } from '@/app/components/ui/checkbox';
@@ -6,7 +6,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/app/components/ui/label';
 import { Input } from '@/app/components/ui/input';
 import { UserPreferences } from '@/app/types/destination';
-import { searchUsers, type UserSearchResult } from '@/app/api/users';
 import { GeoPoint } from '@/app/utils/travel';
 import { Mountain, Waves, Heart, Compass, ChevronDown, ChevronUp, Sun, LucideBook, Ship, Camera, LocateFixed, Sunrise, MoonStar, Clock3 } from 'lucide-react';
 
@@ -14,12 +13,6 @@ interface PreferenceFormProps {
   onSubmit: (preferences: UserPreferences) => void | Promise<void>;
   onLocationChange?: (location: GeoPoint | null) => void;
 }
-
-type CollaboratorSelection = {
-  id?: string;
-  label: string;
-  secondary?: string;
-};
 
 // Define sub-interests for each main interest
 const interestOptionsWithSubs = [
@@ -133,11 +126,6 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
   const [timePreference, setTimePreference] = useState<'day_only' | 'night_only' | 'whole_day'>('whole_day');
   const [budget, setBudget] = useState<string>('1000');
   const [duration, setDuration] = useState<string>('');
-  const [travelStyle, setTravelStyle] = useState<string[]>(['solo']);
-  const [collaborators, setCollaborators] = useState<CollaboratorSelection[]>([]);
-  const [collaboratorQuery, setCollaboratorQuery] = useState('');
-  const [collaboratorSuggestions, setCollaboratorSuggestions] = useState<UserSearchResult[]>([]);
-  const [isSearchingCollaborators, setIsSearchingCollaborators] = useState(false);
   const [showInterestError, setShowInterestError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -148,18 +136,6 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
   >('idle');
   const [locationMessage, setLocationMessage] = useState<string>('');
   const preferenceBudgetFallback = 5000;
-  const selectedTravelStyle = travelStyle[0] ?? 'solo';
-  const collaboratorLimit = selectedTravelStyle === 'couple' ? 1
-    : selectedTravelStyle === 'family_group' ? Number.POSITIVE_INFINITY
-    : 0;
-  const completedCollaborators = useMemo(
-    () => collaborators.filter((item) => item.label.trim() !== ''),
-    [collaborators]
-  );
-  const canAddMoreCollaborators =
-    collaboratorLimit === 0
-      ? false
-      : (collaboratorLimit === Number.POSITIVE_INFINITY || completedCollaborators.length < collaboratorLimit);
 
   const mainInterestIds = interestOptionsWithSubs.map((option) => option.id);
 
@@ -207,116 +183,6 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
     );
   };
 
-  const toggleTravelStyle = (style: string) => {
-    const nextStyle = selectedTravelStyle === style ? 'solo' : style;
-    setTravelStyle([nextStyle]);
-    if (nextStyle === 'couple') {
-      setCollaborators(prev => prev.filter((item) => item.label.trim() !== '').slice(0, 1));
-    } else if (nextStyle === 'family_group') {
-      setCollaborators(prev => prev.filter((item) => item.label.trim() !== ''));
-    } else {
-      setCollaborators([]);
-    }
-    setCollaboratorQuery('');
-    setCollaboratorSuggestions([]);
-  };
-
-  const addCollaborator = (value: string | UserSearchResult) => {
-    const draft: CollaboratorSelection = typeof value === 'string'
-      ? { label: value.trim() }
-      : {
-          id: value.id?.trim() || undefined,
-          label: value.label.trim(),
-          secondary: value.secondary,
-        };
-    if (!draft.label || !canAddMoreCollaborators) return;
-    const exists = completedCollaborators.some((collaborator) => {
-      if (collaborator.id && draft.id) {
-        return collaborator.id === draft.id;
-      }
-      return collaborator.label.toLowerCase() === draft.label.toLowerCase();
-    });
-    if (exists) {
-      setCollaboratorQuery('');
-      setCollaboratorSuggestions([]);
-      return;
-    }
-    setCollaborators((prev) => {
-      const next = [...prev, draft];
-      if (selectedTravelStyle === 'couple') {
-        return next.slice(0, 1);
-      }
-      return next;
-    });
-    setCollaboratorQuery('');
-    setCollaboratorSuggestions([]);
-  };
-
-  const removeCollaborator = (target: CollaboratorSelection) => {
-    setCollaborators((prev) => prev.filter((collaborator) => {
-      if (collaborator.id && target.id) {
-        return collaborator.id !== target.id;
-      }
-      return collaborator.label !== target.label;
-    }));
-  };
-
-  useEffect(() => {
-    if (collaboratorLimit === 0) {
-      setCollaboratorSuggestions([]);
-      setIsSearchingCollaborators(false);
-      return;
-    }
-    const query = collaboratorQuery.trim();
-    if (query.length < 2) {
-      setCollaboratorSuggestions([]);
-      setIsSearchingCollaborators(false);
-      return;
-    }
-
-    let cancelled = false;
-    setIsSearchingCollaborators(true);
-    const timer = setTimeout(() => {
-      void searchUsers(query)
-        .then((results) => {
-          if (cancelled) return;
-          const selectedIds = new Set(
-            completedCollaborators
-              .map((item) => item.id)
-              .filter((id): id is string => Boolean(id))
-          );
-          const selectedLabels = new Set(completedCollaborators.map((item) => item.label.toLowerCase()));
-          setCollaboratorSuggestions(
-            results.filter((item) => {
-              if (item.id && selectedIds.has(item.id)) return false;
-              return !selectedLabels.has(item.label.toLowerCase());
-            })
-          );
-        })
-        .finally(() => {
-          if (cancelled) return;
-          setIsSearchingCollaborators(false);
-        });
-    }, 250);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [collaboratorLimit, collaboratorQuery, completedCollaborators]);
-
-  useEffect(() => {
-    if (!canAddMoreCollaborators) {
-      setCollaboratorSuggestions([]);
-    }
-  }, [canAddMoreCollaborators]);
-
-  const handleCollaboratorInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== 'Enter') return;
-    event.preventDefault();
-    addCollaborator(collaboratorQuery);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
@@ -350,12 +216,6 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
       return;
     }
 
-    if (collaboratorLimit > 0 && completedCollaborators.length === 0) {
-      setSubmitError('Please add at least one collaborator for this travel style.');
-      setIsSubmitting(false);
-      return;
-    }
-    
     try {
       const autoRankedMainInterests = mainInterestOrder
         .filter((interestId) => mainInterestIds.includes(interestId) && interests.includes(interestId))
@@ -365,10 +225,6 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
         acc[interestId] = index + 1;
         return acc;
       }, {});
-      const collaboratorLabels = completedCollaborators.map((item) => item.label);
-      const collaboratorIds = completedCollaborators
-        .map((item) => item.id)
-        .filter((id): id is string => Boolean(id));
 
       await onSubmit({
         interests,
@@ -377,9 +233,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
         timePreference,
         budget: budgetNum,
         duration: durationNum,
-        travelStyle,
-        collaborators: collaboratorLabels,
-        ...(collaboratorIds.length > 0 ? { collaboratorIds } : {}),
+        travelStyle: [],
       });
     } catch (error) {
       console.error('Failed to submit preferences:', error);
@@ -499,36 +353,10 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
           </div>
         </div>
         
-        {/* Travel Style */}
-        <div className="space-y-4">
-          <Label className="text-lg">Travel Style</Label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-            {['solo', 'couple', 'family_group'].map(style => {
-              const isSelected = selectedTravelStyle === style;
-              const label = style === 'family_group' ? 'family/group' : style;
-              return (
-                <button
-                  key={style}
-                  type="button"
-                  onClick={() => toggleTravelStyle(style)}
-                  className={`rounded-lg border-2 px-4 py-3 text-left transition-all capitalize ${
-                    isSelected
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 hover:border-gray-300 text-gray-700'
-                  }`}
-                >
-                  <p className="text-sm font-semibold">{label}</p>
-                  <p className="text-xs text-gray-600">
-                    {style === 'solo' && 'Just you.'}
-                    {style === 'couple' && 'You + 1 traveler.'}
-                    {style === 'family_group' && 'Add travelers as needed.'}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          If you want to collaborate with other users, open <span className="font-semibold">Edit Itinerary</span> and use
+          <span className="font-semibold"> Send Invite</span>.
         </div>
-
         <div className="space-y-4">
           <Label className="text-lg">Preferred Time</Label>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -576,84 +404,6 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
           </div>
         </div>
 
-        {collaboratorLimit > 0 && (
-          <div className="space-y-4">
-            <Label className="text-lg">Collaborators</Label>
-            <div className="space-y-3">
-              {completedCollaborators.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {completedCollaborators.map((collaborator) => (
-                    <span
-                      key={`${collaborator.id ?? collaborator.label}`}
-                      className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-sm text-blue-700"
-                    >
-                      @{collaborator.label}
-                      <button
-                        type="button"
-                        onClick={() => removeCollaborator(collaborator)}
-                        className="text-blue-600 hover:text-blue-800"
-                        aria-label={`Remove ${collaborator.label}`}
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <Input
-                type="text"
-                value={collaboratorQuery}
-                onChange={(e) => setCollaboratorQuery(e.target.value)}
-                onKeyDown={handleCollaboratorInputKeyDown}
-                placeholder={
-                  canAddMoreCollaborators
-                    ? (selectedTravelStyle === 'couple'
-                        ? 'Type username or email, then press Enter'
-                        : 'Add collaborator username/email')
-                    : 'Collaborator limit reached'
-                }
-                className="text-sm"
-                disabled={!canAddMoreCollaborators}
-              />
-
-              {isSearchingCollaborators && (
-                <p className="text-xs text-gray-500">Searching users...</p>
-              )}
-
-              {!isSearchingCollaborators && collaboratorSuggestions.length > 0 && (
-                <div className="rounded-md border border-gray-200 bg-white p-2">
-                  <div className="flex flex-wrap gap-2">
-                    {collaboratorSuggestions.map((suggestion) => (
-                      <button
-                        key={`${suggestion.id ?? suggestion.label}`}
-                        type="button"
-                        onClick={() => addCollaborator(suggestion)}
-                        className="rounded-full border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:border-blue-400 hover:text-blue-700"
-                        disabled={!canAddMoreCollaborators}
-                        title={suggestion.secondary}
-                      >
-                        @{suggestion.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {!isSearchingCollaborators && collaboratorQuery.trim().length >= 2 && collaboratorSuggestions.length === 0 && canAddMoreCollaborators && (
-                <p className="text-xs text-gray-500">
-                  No suggested users found. Press Enter to add manually.
-                </p>
-              )}
-            </div>
-            <p className="text-sm text-gray-600">
-              Add collaborators by username or email. You can still type manually and press Enter.
-            </p>
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Invite is sent later in <span className="font-semibold">Edit Itinerary</span> after the itinerary is created.
-            </div>
-          </div>
-        )}
 
         {/* Interests with Sub-interests */}
         <div className="space-y-4">

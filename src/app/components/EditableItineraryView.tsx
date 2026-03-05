@@ -13,11 +13,13 @@ import { createItinerary, deleteRemoteItinerary } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
 import { inviteCollaboratorToItinerary, pushItinerarySync } from '@/app/api/collaboration';
 import { useItineraryCollaboration } from '@/app/hooks/use-itinerary-collaboration';
+import { GeoPoint } from '@/app/utils/travel';
 
 interface EditableItineraryViewProps {
   savedItinerary: SavedItinerary;
   allDestinations: Destination[];
   currentUserId?: string;
+  userLocation?: GeoPoint | null;
   onBack: () => void;
   onUpdate: () => void;
   onSaveChangesSuccess?: (savedItinerary: SavedItinerary) => void;
@@ -28,6 +30,7 @@ export function EditableItineraryView({
   savedItinerary,
   allDestinations,
   currentUserId,
+  userLocation,
   onBack,
   onUpdate,
   onSaveChangesSuccess,
@@ -457,7 +460,7 @@ export function EditableItineraryView({
                                 <span>{formatPeso(dest.estimatedCost)}</span>
                               </div>
                             </div>
-                          <TravelModeBadges destination={dest} />
+                          <TravelModeBadges destination={dest} origin={userLocation} />
                         </div>
                       </div>
 
@@ -568,7 +571,7 @@ export function EditableItineraryView({
                     {formatPeso(selectedDestination.estimatedCost)}
                   </span>
                 </div>
-                <TravelModeBadges destination={selectedDestination} />
+                <TravelModeBadges destination={selectedDestination} origin={userLocation} />
               </div>
             </>
           )}

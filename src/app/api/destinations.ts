@@ -51,6 +51,12 @@ type RawDestination = Partial<Destination> & {
     longitude?: number | string;
     coordinates?: [number, number];
   };
+  imageUrl?: string;
+  image_url?: string;
+  thumbnail?: string;
+  photo?: string;
+  photos?: string[] | Array<{ url?: string; secure_url?: string; path?: string }>;
+  images?: string[] | Array<{ url?: string; secure_url?: string; path?: string }>;
 };
 
 function extractDestinations(payload: DestinationPayload): Destination[] {
@@ -100,6 +106,39 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
     return DIFFICULTY_FALLBACK;
   };
 
+  const pickImageValue = (item: RawDestination): string => {
+    const objectWithUrl = (value: unknown): string => {
+      if (!value || typeof value !== 'object') return '';
+      const candidate = value as { url?: unknown; secure_url?: unknown; path?: unknown };
+      return (
+        normalizeText(candidate.url) ||
+        normalizeText(candidate.secure_url) ||
+        normalizeText(candidate.path)
+      );
+    };
+
+    const fromArray = (value: unknown): string => {
+      if (!Array.isArray(value) || value.length === 0) return '';
+      for (const entry of value) {
+        const asText = normalizeText(entry);
+        if (asText) return asText;
+        const asObject = objectWithUrl(entry);
+        if (asObject) return asObject;
+      }
+      return '';
+    };
+
+    return (
+      normalizeText(item.image) ||
+      normalizeText(item.imageUrl) ||
+      normalizeText(item.image_url) ||
+      normalizeText(item.thumbnail) ||
+      normalizeText(item.photo) ||
+      fromArray(item.images) ||
+      fromArray(item.photos)
+    );
+  };
+
   return items.map((item, index) => {
     const fallbackId = `destination-${index}-${String(item.name ?? 'unknown')
       .toLowerCase()
@@ -138,7 +177,7 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
       bestTimeToVisit,
       estimatedCost: Math.max(0, estimatedCost),
       location: normalizeLocation(item),
-      image: resolveAssetUrl(item.image),
+      image: resolveAssetUrl(pickImageValue(item)),
     } as Destination;
   });
 }

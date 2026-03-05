@@ -876,6 +876,7 @@ export default function App() {
             savedItinerary={viewingSavedItinerary}
             allDestinations={allDestinations}
             currentUserId={currentUser?.id}
+            userLocation={userLocation}
             onBack={() => setCurrentView('saved-itineraries')}
             onSaveChangesSuccess={(savedItinerary) => {
               trackEvent('saved_itinerary_updated', {

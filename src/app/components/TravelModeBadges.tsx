@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Bike, Car, PersonStanding } from 'lucide-react';
 import { Destination } from '@/app/types/destination';
 import {
-  DEFAULT_ORIGIN,
   estimateMinutes,
   fetchRoutingEstimate,
   formatDistanceKm,
@@ -49,9 +48,14 @@ export function TravelModeBadges({ destination, origin }: TravelModeBadgesProps)
   // Keep routing API opt-in so local/dev runs don't flood the console when backend routing is unavailable.
   const canUseRoutingApi = import.meta.env.VITE_ENABLE_ROUTING_API === 'true';
   const hasLocation = hasValidLocation(destination);
-  const selectedOrigin = origin ?? DEFAULT_ORIGIN;
+  const hasUserOrigin =
+    origin != null &&
+    isValidCoordinate(origin.lat, -90, 90) &&
+    isValidCoordinate(origin.lng, -180, 180);
+  const selectedOrigin = hasUserOrigin ? origin : null;
 
-  const distanceKmFallback = hasLocation ? haversineKm(selectedOrigin, destination.location) : 0;
+  const distanceKmFallback =
+    hasLocation && selectedOrigin ? haversineKm(selectedOrigin, destination.location) : 0;
   const distanceLabelFallback = formatDistanceKm(distanceKmFallback);
   const fallback = useMemo(
     () => ({
@@ -70,7 +74,7 @@ export function TravelModeBadges({ destination, origin }: TravelModeBadgesProps)
     profile: TravelProfile,
     setter: (state: ModeState) => void
   ) => {
-    if (!canUseRoutingApi || !hasLocation || Date.now() < routingDisabledUntil) {
+    if (!canUseRoutingApi || !hasLocation || !selectedOrigin || Date.now() < routingDisabledUntil) {
       setter({ loading: false });
       return;
     }
@@ -124,6 +128,12 @@ export function TravelModeBadges({ destination, origin }: TravelModeBadgesProps)
       setDrive({ loading: false, error: 'Distance unavailable' });
       return;
     }
+    if (!selectedOrigin) {
+      setWalk({ loading: false });
+      setBike({ loading: false });
+      setDrive({ loading: false });
+      return;
+    }
 
     setWalk({ loading: true });
     setBike({ loading: true });
@@ -155,36 +165,60 @@ export function TravelModeBadges({ destination, origin }: TravelModeBadgesProps)
       setWalk({ loading: false, error: state.error });
       setBike({ loading: false, error: state.error });
     });
-  }, [destination.id, destination.name, destination.location?.lat, destination.location?.lng, canUseRoutingApi, hasLocation, selectedOrigin.lat, selectedOrigin.lng]);
+  }, [
+    destination.id,
+    destination.name,
+    destination.location?.lat,
+    destination.location?.lng,
+    canUseRoutingApi,
+    hasLocation,
+    selectedOrigin?.lat,
+    selectedOrigin?.lng,
+  ]);
 
   const renderBadge = (
     icon: React.ReactNode,
     state: ModeState,
-    fallbackMinutes: number
+    fallbackMinutes: number,
+    mode: 'walking' | 'bicycling' | 'driving'
   ) => {
+    if (!selectedOrigin) return null;
     const minutes = state.estimate?.durationMin ?? fallbackMinutes;
     const distanceLabel = state.estimate
       ? formatDistanceKm(state.estimate.distanceKm)
       : distanceLabelFallback;
+    const destinationCoords = `${destination.location.lat},${destination.location.lng}`;
+    const originCoords = `${selectedOrigin.lat},${selectedOrigin.lng}`;
+    const directionsUrl = hasUserOrigin
+      ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originCoords)}&destination=${encodeURIComponent(destinationCoords)}&travelmode=${mode}`
+      : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destinationCoords)}&travelmode=${mode}`;
 
     return (
-      <div className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1 shadow-sm">
+      <button
+        type="button"
+        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1 shadow-sm transition hover:bg-slate-50"
+        onClick={() => window.open(directionsUrl, '_blank', 'noopener,noreferrer')}
+        title="Open live directions in Google Maps"
+      >
         {icon}
         <span>{state.loading ? '...' : `${minutes} min`}</span>
         <span className="text-slate-400">({distanceLabel})</span>
-      </div>
+      </button>
     );
   };
 
   if (!hasLocation) {
     return <div className="text-xs text-slate-500">Distance unavailable</div>;
   }
+  if (!selectedOrigin) {
+    return <div className="text-xs text-amber-700">Enable location to see accurate travel distance and time.</div>;
+  }
 
   return (
     <div className="flex flex-wrap gap-2 text-xs text-slate-700">
-      {renderBadge(<PersonStanding className="h-4 w-4 text-slate-600" />, walk, fallback.walk)}
-      {renderBadge(<Bike className="h-4 w-4 text-slate-600" />, bike, fallback.bike)}
-      {renderBadge(<Car className="h-4 w-4 text-slate-600" />, drive, fallback.drive)}
+      {renderBadge(<PersonStanding className="h-4 w-4 text-slate-600" />, walk, fallback.walk, 'walking')}
+      {renderBadge(<Bike className="h-4 w-4 text-slate-600" />, bike, fallback.bike, 'bicycling')}
+      {renderBadge(<Car className="h-4 w-4 text-slate-600" />, drive, fallback.drive, 'driving')}
     </div>
   );
 }
