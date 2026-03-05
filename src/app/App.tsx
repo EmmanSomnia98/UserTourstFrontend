@@ -29,7 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/app/components/ui/dialog';
-import { MapPin, Sparkles, BookOpen, Menu, LocateFixed, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MapPin, Sparkles, BookOpen, Menu, LocateFixed } from 'lucide-react';
 import backgroundImage from '@/assets/bulusan-lake.jpg';
 
 type AppView =
@@ -89,20 +89,10 @@ export default function App() {
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [logoutStep, setLogoutStep] = useState<'confirm' | 'thanks'>('confirm');
   const [userLocation, setUserLocation] = useState<GeoPoint | null>(null);
-  const [heroStartIndex, setHeroStartIndex] = useState(0);
-  const [isHeroTransitioning, setIsHeroTransitioning] = useState(false);
   const [locationStatus, setLocationStatus] = useState<
     'idle' | 'requesting' | 'granted' | 'denied' | 'unavailable' | 'error'
   >('idle');
-  const heroVisibleCount = Math.min(3, allDestinations.length);
-  const heroDestinations =
-    heroVisibleCount === 0
-      ? []
-      : Array.from({ length: heroVisibleCount }, (_, offset) => {
-          const index = (heroStartIndex + offset) % allDestinations.length;
-          return allDestinations[index];
-        });
-  const showHeroGrid = heroDestinations.length > 0;
+  const showHeroGrid = allDestinations.length > 0;
   const feedbackIdentity = {
     userId: currentUser?.id,
     userEmail: currentUser?.email,
@@ -161,16 +151,6 @@ export default function App() {
       isMounted = false;
     };
   }, []);
-
-  useEffect(() => {
-    if (allDestinations.length === 0) {
-      setHeroStartIndex(0);
-      return;
-    }
-    if (heroStartIndex >= allDestinations.length) {
-      setHeroStartIndex(0);
-    }
-  }, [allDestinations.length, heroStartIndex]);
 
   useEffect(() => {
     void flushFeedbackQueue();
@@ -514,18 +494,6 @@ export default function App() {
     );
   };
 
-  const rotateHero = (delta: -1 | 1) => {
-    if (allDestinations.length === 0 || isHeroTransitioning) return;
-    setIsHeroTransitioning(true);
-    window.setTimeout(() => {
-      setHeroStartIndex((prev) => (prev + delta + allDestinations.length) % allDestinations.length);
-      setIsHeroTransitioning(false);
-    }, 140);
-  };
-
-  const handleHeroPrevious = () => rotateHero(-1);
-  const handleHeroNext = () => rotateHero(1);
-
   const handleStartPlanning = () => {
     if (!isAuthenticated) {
       setShowAuthPrompt(true);
@@ -633,7 +601,12 @@ export default function App() {
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
           <div className="flex items-start justify-between sm:items-center">
-            <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleBackToWelcome}
+              className="flex items-center gap-3 text-left"
+              aria-label="Go to homepage"
+            >
               <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
                 <MapPin className="w-6 h-6 text-white" />
               </div>
@@ -641,30 +614,32 @@ export default function App() {
                 <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">Bulusan Wanderer</h1>
                 <p className="text-sm text-gray-600">Personalized Itinerary Planner</p>
               </div>
-            </div>
+            </button>
             <div className="flex items-center gap-2">
-              <Button
-                variant={locationStatus === 'granted' ? 'secondary' : 'outline'}
-                className={desktopActionButtonClass}
-                onClick={handleAllowLocation}
-                disabled={locationStatus === 'requesting'}
-                title={
-                  locationStatus === 'denied'
-                    ? 'Location denied. Allow location in browser settings and try again.'
-                    : locationStatus === 'unavailable'
-                      ? 'Location is not supported by this browser/device.'
-                      : undefined
-                }
-              >
-                <LocateFixed className="w-4 h-4 sm:mr-2" />
-                <span className="hidden sm:inline">
-                  {locationStatus === 'requesting'
-                    ? 'Requesting...'
-                    : locationStatus === 'granted'
-                      ? 'Location On'
-                      : 'Allow Location'}
-                </span>
-              </Button>
+              {(currentView === 'welcome' || currentView === 'all-destinations') && (
+                <Button
+                  variant={locationStatus === 'granted' ? 'secondary' : 'outline'}
+                  className={desktopActionButtonClass}
+                  onClick={handleAllowLocation}
+                  disabled={locationStatus === 'requesting'}
+                  title={
+                    locationStatus === 'denied'
+                      ? 'Location denied. Allow location in browser settings and try again.'
+                      : locationStatus === 'unavailable'
+                        ? 'Location is not supported by this browser/device.'
+                        : undefined
+                  }
+                >
+                  <LocateFixed className="w-4 h-4 sm:mr-2" />
+                  <span className="text-xs sm:text-sm">
+                    {locationStatus === 'requesting'
+                      ? 'Requesting...'
+                      : locationStatus === 'granted'
+                        ? 'Location On'
+                        : 'Allow Location'}
+                  </span>
+                </Button>
+              )}
               <CollaborationNotifications
                 isAuthenticated={isAuthenticated}
                 onOpenItinerary={handleOpenCollaborativeItinerary}
@@ -772,16 +747,14 @@ export default function App() {
             )}
 
             {showHeroGrid ? (
-              <div className="relative max-w-5xl mx-auto">
+              <div className="max-w-5xl mx-auto">
                 <div
-                  className={`flex gap-4 overflow-x-auto pb-1 md:grid md:grid-cols-3 md:overflow-visible md:pb-0 transition-opacity duration-300 ${
-                    isHeroTransitioning ? 'opacity-0' : 'opacity-100'
-                  }`}
+                  className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1"
                 >
-                  {heroDestinations.map((destination, index) => (
+                  {allDestinations.map((destination, index) => (
                     <div
                       key={destination.id ?? `${destination.name}-${index}`}
-                      className="relative h-56 min-w-[260px] rounded-lg overflow-hidden shadow-lg md:h-64 md:min-w-0"
+                      className="relative h-56 min-w-[260px] snap-start rounded-lg overflow-hidden shadow-lg md:h-64 md:min-w-[320px]"
                     >
                       <img
                         src={destination.image}
@@ -794,30 +767,6 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-                {allDestinations.length > heroVisibleCount && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="absolute -left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/95 shadow-md"
-                      aria-label="Previous destination"
-                      onClick={handleHeroPrevious}
-                      disabled={isHeroTransitioning}
-                    >
-                      <ChevronLeft className="w-5 h-5" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="absolute -right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/95 shadow-md"
-                      aria-label="Next destination"
-                      onClick={handleHeroNext}
-                      disabled={isHeroTransitioning}
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </Button>
-                  </>
-                )}
               </div>
             ) : (
               <div className="max-w-5xl mx-auto">
