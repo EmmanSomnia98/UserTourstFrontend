@@ -3,7 +3,7 @@ import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { Destination } from '@/app/types/destination';
 
 type BackendItineraryDestination = {
-  destination?: Destination & {
+  destination?: (Destination & {
     id?: unknown;
     _id?: unknown;
     destinationId?: unknown;
@@ -34,7 +34,7 @@ type BackendItineraryDestination = {
     photo?: string;
     photos?: string[] | Array<{ url?: string; secure_url?: string; path?: string }>;
     images?: string[] | Array<{ url?: string; secure_url?: string; path?: string }>;
-  };
+  }) | string | number;
   destinationId?: unknown;
   cost?: number;
   hybridScore?: number;
@@ -77,54 +77,102 @@ const recentCreateByKey = new Map<string, { at: number; value: SavedItinerary | 
 
 function toDestinationList(items: BackendItineraryDestination[] | undefined): Destination[] {
   if (!items?.length) return [];
+
+  const normalizeText = (value: unknown): string =>
+    typeof value === 'string' ? value.trim() : '';
+  const normalizeDestinationType = (value: unknown): Destination['type'] => {
+    const normalized = normalizeText(value).toLowerCase();
+    if (
+      normalized === 'nature' ||
+      normalized === 'adventure' ||
+      normalized === 'cultural' ||
+      normalized === 'relaxation' ||
+      normalized === 'historical'
+    ) {
+      return normalized;
+    }
+    return 'nature';
+  };
+  const normalizeDifficulty = (value: unknown): Destination['difficulty'] => {
+    const normalized = normalizeText(value).toLowerCase();
+    if (normalized === 'easy' || normalized === 'moderate' || normalized === 'challenging') {
+      return normalized;
+    }
+    return 'easy';
+  };
+  const normalizeStringArray = (value: unknown): string[] => {
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+      .filter(Boolean);
+  };
+  const objectWithUrl = (value: unknown): string => {
+    if (!value || typeof value !== 'object') return '';
+    const candidate = value as { url?: unknown; secure_url?: unknown; path?: unknown };
+    return (
+      normalizeText(candidate.url) ||
+      normalizeText(candidate.secure_url) ||
+      normalizeText(candidate.path)
+    );
+  };
+  const fromArray = (value: unknown): string => {
+    if (!Array.isArray(value) || value.length === 0) return '';
+    for (const entry of value) {
+      const asText = normalizeText(entry);
+      if (asText) return asText;
+      const asObject = objectWithUrl(entry);
+      if (asObject) return asObject;
+    }
+    return '';
+  };
+
   return items
     .map((item) => {
-      const destination = item.destination;
-      if (!destination) return null;
+      const destinationRaw = item.destination;
+      const destination =
+        destinationRaw && typeof destinationRaw === 'object'
+          ? (destinationRaw as NonNullable<BackendItineraryDestination['destination']> & Record<string, unknown>)
+          : null;
       const normalizedId = normalizeIdentifier(
-        destination.id ?? destination._id ?? destination.destinationId ?? item.destinationId
+        destination?.id ??
+        destination?._id ??
+        destination?.destinationId ??
+        item.destinationId ??
+        (typeof destinationRaw === 'string' || typeof destinationRaw === 'number' ? destinationRaw : null)
       );
       if (!normalizedId) return null;
       const getImage = (): string => {
-        const normalizeText = (value: unknown): string =>
-          typeof value === 'string' ? value.trim() : '';
-        const objectWithUrl = (value: unknown): string => {
-          if (!value || typeof value !== 'object') return '';
-          const candidate = value as { url?: unknown; secure_url?: unknown; path?: unknown };
-          return (
-            normalizeText(candidate.url) ||
-            normalizeText(candidate.secure_url) ||
-            normalizeText(candidate.path)
-          );
-        };
-        const fromArray = (value: unknown): string => {
-          if (!Array.isArray(value) || value.length === 0) return '';
-          for (const entry of value) {
-            const asText = normalizeText(entry);
-            if (asText) return asText;
-            const asObject = objectWithUrl(entry);
-            if (asObject) return asObject;
-          }
-          return '';
-        };
-
         return (
-          normalizeText(destination.image) ||
-          normalizeText(destination.imageUrl) ||
-          normalizeText(destination.image_url) ||
-          normalizeText(destination.thumbnail) ||
-          normalizeText(destination.photo) ||
-          fromArray(destination.images) ||
-          fromArray(destination.photos)
+          normalizeText(destination?.image) ||
+          normalizeText(destination?.imageUrl) ||
+          normalizeText(destination?.image_url) ||
+          normalizeText(destination?.thumbnail) ||
+          normalizeText(destination?.photo) ||
+          fromArray(destination?.images) ||
+          fromArray(destination?.photos)
         );
       };
+      const estimatedCost = toNumber(destination?.estimatedCost) ?? toNumber(item.cost) ?? 0;
+      const location = normalizeLocation(destination as BackendItineraryDestination['destination']);
+      const duration = normalizeDuration(destination as BackendItineraryDestination['destination']);
 
       return {
         ...(destination as Destination),
         id: normalizedId,
-        duration: normalizeDuration(destination),
-        location: normalizeLocation(destination),
+        name: normalizeText(destination?.name) || 'Unknown destination',
+        description: normalizeText(destination?.description),
         image: resolveAssetUrl(getImage()),
+        type: normalizeDestinationType(destination?.type),
+        difficulty: normalizeDifficulty(destination?.difficulty),
+        duration,
+        rating: toNumber(destination?.rating) ?? 0,
+        reviewCount: Math.max(0, Math.round(toNumber(destination?.reviewCount) ?? 0)),
+        interests: normalizeStringArray(destination?.interests),
+        mainInterests: normalizeStringArray(destination?.mainInterests),
+        subInterests: normalizeStringArray(destination?.subInterests),
+        bestTimeToVisit: normalizeStringArray(destination?.bestTimeToVisit),
+        estimatedCost,
+        location,
       } as Destination;
     })
     .filter((dest): dest is Destination => Boolean(dest));
