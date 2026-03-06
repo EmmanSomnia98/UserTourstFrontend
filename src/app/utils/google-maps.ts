@@ -2,7 +2,7 @@ import { Destination } from '@/app/types/destination';
 import { GeoPoint } from '@/app/utils/travel';
 import { formatDistanceKm, haversineKm } from '@/app/utils/travel';
 
-type GoogleTravelMode = 'driving' | 'walking' | 'bicycling' | 'transit';
+type GoogleTravelMode = 'driving' | 'walking' | 'two-wheeler' | 'bicycling' | 'transit';
 
 type BuildGoogleMapsRouteOptions = {
   origin?: GeoPoint | null;

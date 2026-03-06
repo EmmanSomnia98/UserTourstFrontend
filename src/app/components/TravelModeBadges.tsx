@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bike, Car, PersonStanding } from 'lucide-react';
+import { Car, PersonStanding } from 'lucide-react';
 import { Destination } from '@/app/types/destination';
 import {
   estimateMinutes,
@@ -28,6 +28,27 @@ const failedAt = new Map<string, number>();
 const FAILURE_RETRY_MS = 5 * 60 * 1000;
 const GLOBAL_DISABLE_MS = 2 * 60 * 1000;
 let routingDisabledUntil = 0;
+
+function TwoWheelerIcon({ className = 'h-4 w-4 text-slate-600' }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <circle cx="6" cy="17" r="3" />
+      <circle cx="18" cy="17" r="3" />
+      <path d="M6 17h4l2-4h3l3 4" />
+      <path d="M10 13L8 9h3l2 4" />
+      <path d="M15 9h3" />
+    </svg>
+  );
+}
 
 function isValidCoordinate(value: number, min: number, max: number): boolean {
   return Number.isFinite(value) && value >= min && value <= max;
@@ -180,7 +201,7 @@ export function TravelModeBadges({ destination, origin }: TravelModeBadgesProps)
     icon: React.ReactNode,
     state: ModeState,
     fallbackMinutes: number,
-    mode: 'walking' | 'bicycling' | 'driving'
+    mode: 'walking' | 'two-wheeler' | 'driving'
   ) => {
     if (!selectedOrigin) return null;
     const minutes = state.estimate?.durationMin ?? fallbackMinutes;
@@ -192,6 +213,8 @@ export function TravelModeBadges({ destination, origin }: TravelModeBadgesProps)
     const directionsUrl = hasUserOrigin
       ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originCoords)}&destination=${encodeURIComponent(destinationCoords)}&travelmode=${mode}`
       : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destinationCoords)}&travelmode=${mode}`;
+    const modeLabel =
+      mode === 'walking' ? 'Walk' : mode === 'two-wheeler' ? 'Two-wheeler' : 'Drive';
 
     return (
       <button
@@ -201,6 +224,7 @@ export function TravelModeBadges({ destination, origin }: TravelModeBadgesProps)
         title="Open live directions in Google Maps"
       >
         {icon}
+        <span>{modeLabel}</span>
         <span>{state.loading ? '...' : `${minutes} min`}</span>
         <span className="text-slate-400">({distanceLabel})</span>
       </button>
@@ -217,7 +241,7 @@ export function TravelModeBadges({ destination, origin }: TravelModeBadgesProps)
   return (
     <div className="flex flex-wrap gap-2 text-xs text-slate-700">
       {renderBadge(<PersonStanding className="h-4 w-4 text-slate-600" />, walk, fallback.walk, 'walking')}
-      {renderBadge(<Bike className="h-4 w-4 text-slate-600" />, bike, fallback.bike, 'bicycling')}
+      {renderBadge(<TwoWheelerIcon className="h-4 w-4 text-slate-600" />, bike, fallback.bike, 'two-wheeler')}
       {renderBadge(<Car className="h-4 w-4 text-slate-600" />, drive, fallback.drive, 'driving')}
     </div>
   );
