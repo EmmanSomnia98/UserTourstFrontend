@@ -223,29 +223,9 @@ export default function App() {
       uniqueRecommended.push(destination);
     });
 
-    // Keep AI-ranked items first, then backfill from admin destinations using local scoring.
-    // Target 2-3 destinations/day when inventory allows.
-    const minPerDay = 2;
-    const maxPerDay = 3;
-    const minTarget = Math.max(prefs.duration, prefs.duration * minPerDay);
-    const maxTarget = Math.max(minTarget, prefs.duration * maxPerDay);
-    const recommendedTarget = uniqueRecommended.length > 0 ? uniqueRecommended.length : minTarget;
-    const targetCount = Math.min(
-      allDestinations.length,
-      Math.min(maxTarget, Math.max(minTarget, recommendedTarget))
-    );
-    const backfill = [...allDestinations]
-      .filter((destination) => !seenIds.has(destination.id))
-      .sort((a, b) => calculateContentScore(b, prefs) - calculateContentScore(a, prefs));
-
-    const itinerarySeed = uniqueRecommended.slice(0, targetCount);
-    for (const candidate of backfill) {
-      if (itinerarySeed.length >= targetCount) break;
-      itinerarySeed.push(candidate);
-    }
-
     setRecommendations(uniqueRecommended);
-    setItinerary(itinerarySeed);
+    // Keep itinerary strict: do not inject non-matching destinations via client-side backfill.
+    setItinerary(uniqueRecommended);
     if (serverScores && serverScores.size > 0) {
       setRecommendationScores(normalizeScores(serverScores));
     } else {

@@ -70,6 +70,7 @@ type RawDestination = Partial<Destination> & {
   photo?: string;
   photos?: string[] | Array<{ url?: string; secure_url?: string; path?: string }>;
   images?: string[] | Array<{ url?: string; secure_url?: string; path?: string }>;
+  features?: Record<string, unknown>;
 };
 
 function extractDestinations(payload: DestinationPayload): Destination[] {
@@ -152,6 +153,29 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
     );
   };
 
+  const extractSubInterestsFromFeatures = (value: unknown): string[] => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+    const features = value as Record<string, unknown>;
+    const extracted: string[] = [];
+
+    Object.values(features).forEach((categoryValue) => {
+      if (!categoryValue || typeof categoryValue !== 'object' || Array.isArray(categoryValue)) return;
+      const flags = categoryValue as Record<string, unknown>;
+      Object.entries(flags).forEach(([featureKey, enabled]) => {
+        if (!(enabled === 1 || enabled === true || enabled === '1')) return;
+        const normalized = featureKey
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '');
+        if (!normalized) return;
+        extracted.push(normalized);
+      });
+    });
+
+    return Array.from(new Set(extracted));
+  };
+
   return items.map((item, index) => {
     const fallbackId = `destination-${index}-${String(item.name ?? 'unknown')
       .toLowerCase()
@@ -176,7 +200,9 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
     const reviewCount = toNumber(item.reviewCount) ?? toNumber(item.review_count) ?? toNumber(item.rating_count) ?? 0;
     const interests = normalizeStringArray(item.interests ?? item.interest ?? item.tags);
     const mainInterests = normalizeStringArray(item.mainInterests ?? item.main_interests);
-    const subInterests = normalizeStringArray(item.subInterests ?? item.sub_interests);
+    const explicitSubInterests = normalizeStringArray(item.subInterests ?? item.sub_interests);
+    const derivedSubInterests = extractSubInterestsFromFeatures(item.features);
+    const subInterests = Array.from(new Set([...explicitSubInterests, ...derivedSubInterests]));
     const bestTimeToVisit = normalizeStringArray(item.bestTimeToVisit ?? item.best_time_to_visit);
 
     return {
@@ -270,6 +296,12 @@ type InterestsSchemaPayload =
         subInterests?: Array<{ id?: unknown; label?: unknown }>;
         sub_interests?: Array<{ id?: unknown; label?: unknown }>;
       }> | Record<string, unknown>;
+      subInterests?: Array<{
+        id?: unknown;
+        label?: unknown;
+        mainInterestId?: unknown;
+        main_interest_id?: unknown;
+      }>;
       interests?: Array<{
         id?: unknown;
         label?: unknown;
@@ -296,8 +328,42 @@ function humanizeInterestId(id: string): string {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function normalizeSubInterestLabel(mainInterestId: string, subInterestId: string, fallbackLabel: string): string {
+  const mainId = mainInterestId.trim().toLowerCase();
+  const subId = subInterestId.trim().toLowerCase();
+
+  // Canonical labels for Cultural Tourism in user preferences UI.
+  if (mainId === 'culture_heritage') {
+    if (subId === 'heritage_tours') return 'Heritage Tours';
+    if (subId === 'food_tourism') return 'Food Tourism';
+    if (subId === 'festivals_events') return 'Festival & Events';
+    if (subId === 'culinary_tourism') return 'Arts & Crafts';
+  }
+
+  return fallbackLabel;
+}
+
 export async function fetchInterestsSchema(): Promise<InterestSchemaMainInterest[]> {
   const payload = await apiGet<InterestsSchemaPayload>('/api/destinations/interests-schema');
+  const topLevelSubInterests = Array.isArray(payload?.subInterests) ? payload.subInterests : [];
+  const subInterestsByMainInterestId = new Map<string, InterestSchemaSubInterest[]>();
+  topLevelSubInterests.forEach((sub) => {
+    const mainInterestId = normalizeSchemaId(
+      (sub as Record<string, unknown>).mainInterestId ??
+      (sub as Record<string, unknown>).main_interest_id
+    );
+    const subId = normalizeSchemaId((sub as Record<string, unknown>).id);
+    const rawSubLabel =
+      normalizeSchemaLabel((sub as Record<string, unknown>).label) ||
+      (subId ? humanizeInterestId(subId) : '');
+    const subLabel = normalizeSubInterestLabel(mainInterestId, subId, rawSubLabel);
+    if (!mainInterestId || !subId) return;
+    const current = subInterestsByMainInterestId.get(mainInterestId) ?? [];
+    if (current.some((item) => item.id === subId)) return;
+    current.push({ id: subId, label: subLabel });
+    subInterestsByMainInterestId.set(mainInterestId, current);
+  });
+
   const arraySource = Array.isArray(payload)
     ? payload
     : Array.isArray(payload?.mainInterests)
@@ -339,7 +405,7 @@ export async function fetchInterestsSchema(): Promise<InterestSchemaMainInterest
         ? subInterestsCandidate
         : Array.isArray(subInterestsLegacyCandidate)
           ? subInterestsLegacyCandidate
-          : [];
+          : subInterestsByMainInterestId.get(id) ?? [];
       const subInterests = rawSubs
         .map((sub) => {
           if (typeof sub === 'string') {
@@ -349,9 +415,10 @@ export async function fetchInterestsSchema(): Promise<InterestSchemaMainInterest
           }
           const subEntry = sub as Record<string, unknown>;
           const subId = normalizeSchemaId(subEntry.id);
-          const subLabel =
+          const rawSubLabel =
             normalizeSchemaLabel(subEntry.label) ||
             (subId ? humanizeInterestId(subId) : '');
+          const subLabel = normalizeSubInterestLabel(id, subId, rawSubLabel);
           if (!subId) return null;
           return { id: subId, label: subLabel };
         })

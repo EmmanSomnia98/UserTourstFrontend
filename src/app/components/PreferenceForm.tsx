@@ -123,6 +123,7 @@ const interestIcons: Record<string, ComponentType<{ className?: string }>> = {
 
 export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormProps) {
   const [interestOptionsWithSubs, setInterestOptionsWithSubs] = useState<InterestSchemaMainInterest[]>(fallbackInterestOptions);
+  const [isUsingFallbackSchema, setIsUsingFallbackSchema] = useState<boolean>(true);
   const [planningMode, setPlanningMode] = useState<'preferences' | 'budget'>('preferences');
   const [interests, setInterests] = useState<string[]>([]);
   const [mainInterestOrder, setMainInterestOrder] = useState<string[]>([]);
@@ -132,6 +133,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
   const [budget, setBudget] = useState<string>('1000');
   const [duration, setDuration] = useState<string>('');
   const [showInterestError, setShowInterestError] = useState(false);
+  const [showSubInterestError, setShowSubInterestError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [locationWarningOpen, setLocationWarningOpen] = useState(false);
@@ -145,28 +147,74 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
   const preferenceBudgetFallback = 0;
 
   const mainInterestIds = interestOptionsWithSubs.map((option) => option.id);
+  const allSubInterestIds = interestOptionsWithSubs.flatMap((option) => option.subInterests.map((sub) => sub.id));
+
+  const normalizeSchemaEntry = (entry: InterestSchemaMainInterest): InterestSchemaMainInterest | null => {
+    const id = typeof entry.id === 'string' ? entry.id.trim() : '';
+    const label = typeof entry.label === 'string' ? entry.label.trim() : '';
+    if (!id || !label) return null;
+
+    const seenSubIds = new Set<string>();
+    const subInterests = (Array.isArray(entry.subInterests) ? entry.subInterests : [])
+      .map((sub) => {
+        const subId = typeof sub.id === 'string' ? sub.id.trim() : '';
+        const subLabel = typeof sub.label === 'string' ? sub.label.trim() : '';
+        if (!subId || !subLabel) return null;
+        if (seenSubIds.has(subId)) return null;
+        seenSubIds.add(subId);
+        return { id: subId, label: subLabel };
+      })
+      .filter((sub): sub is { id: string; label: string } => Boolean(sub));
+
+    return {
+      id,
+      label,
+      subInterests,
+    };
+  };
 
   useEffect(() => {
     let active = true;
     void fetchInterestsSchema()
       .then((schema) => {
         if (!active) return;
-        if (schema.length === 0) return;
-        const hasSubInterests = schema.some((entry) => (entry.subInterests ?? []).length > 0);
-        if (!hasSubInterests) {
-          console.warn('Interests schema returned without sub-interests. Using fallback schema.');
+        const normalizedSchema = schema
+          .map(normalizeSchemaEntry)
+          .filter((entry): entry is InterestSchemaMainInterest => Boolean(entry));
+        if (normalizedSchema.length === 0) {
+          setIsUsingFallbackSchema(true);
+          setInterestOptionsWithSubs(fallbackInterestOptions);
           return;
         }
-        setInterestOptionsWithSubs(schema);
+        const hasSubInterests = normalizedSchema.some((entry) => (entry.subInterests ?? []).length > 0);
+        if (!hasSubInterests) {
+          console.warn('Interests schema returned without sub-interests. Using fallback schema.');
+          setIsUsingFallbackSchema(true);
+          setInterestOptionsWithSubs(fallbackInterestOptions);
+          return;
+        }
+        setIsUsingFallbackSchema(false);
+        setInterestOptionsWithSubs(normalizedSchema);
       })
       .catch((error) => {
         console.error('Failed to load interests schema, using fallback:', error);
+        if (!active) return;
+        setIsUsingFallbackSchema(true);
+        setInterestOptionsWithSubs(fallbackInterestOptions);
       });
 
     return () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    // Keep selected values aligned with the currently loaded schema.
+    const allowedIds = new Set([...mainInterestIds, ...allSubInterestIds]);
+    setInterests((prev) => prev.filter((id) => allowedIds.has(id)));
+    setMainInterestOrder((prev) => prev.filter((id) => mainInterestIds.includes(id)));
+    setExpandedInterests((prev) => prev.filter((id) => mainInterestIds.includes(id)));
+  }, [mainInterestIds.join('|'), allSubInterestIds.join('|')]);
 
   const toggleInterest = (interest: string) => {
     const isCurrentlySelected = interests.includes(interest);
@@ -184,6 +232,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
       setMainInterestOrder(prev => (prev.includes(interest) ? prev : [...prev, interest]));
       setExpandedInterests(prev => [...prev, interest]);
       setShowInterestError(false);
+      setShowSubInterestError(false);
     }
   };
 
@@ -196,9 +245,11 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
         if (!prev.includes(mainInterest)) {
           setMainInterestOrder(order => (order.includes(mainInterest) ? order : [...order, mainInterest]));
           setShowInterestError(false);
+          setShowSubInterestError(false);
           return [...prev, mainInterest, subInterestId];
         }
         setShowInterestError(false);
+        setShowSubInterestError(false);
         return [...prev, subInterestId];
       }
     });
@@ -232,6 +283,11 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
       setShowInterestError(true);
       return;
     }
+    const selectedSubInterests = interests.filter((interestId) => allSubInterestIds.includes(interestId));
+    if (selectedSubInterests.length === 0) {
+      setShowSubInterestError(true);
+      return;
+    }
 
     setIsSubmitting(true);
     
@@ -250,7 +306,6 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
         .filter((interestId) => mainInterestIds.includes(interestId) && interests.includes(interestId))
         .slice(0, 9);
       const selectedMainInterests = autoRankedMainInterests;
-      const selectedSubInterests = interests.filter((interestId) => !mainInterestIds.includes(interestId));
 
       const interestRanks = autoRankedMainInterests.reduce<Record<string, number>>((acc, interestId, index) => {
         acc[interestId] = index + 1;
@@ -446,9 +501,19 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
               Please select at least one interest to continue.
             </p>
           )}
+          {showSubInterestError && (
+            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              Please select at least one sub-interest to continue.
+            </p>
+          )}
           {submitError && (
             <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {submitError}
+            </p>
+          )}
+          {isUsingFallbackSchema && (
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Using fallback interest taxonomy because backend schema is incomplete.
             </p>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
