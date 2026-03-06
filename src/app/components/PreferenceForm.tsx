@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type ComponentType, useEffect, useState } from 'react';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import { Checkbox } from '@/app/components/ui/checkbox';
@@ -7,6 +7,7 @@ import { Label } from '@/app/components/ui/label';
 import { Input } from '@/app/components/ui/input';
 import { UserPreferences } from '@/app/types/destination';
 import { GeoPoint } from '@/app/utils/travel';
+import { fetchInterestsSchema, InterestSchemaMainInterest } from '@/app/api/destinations';
 import { Mountain, Waves, Heart, Compass, ChevronDown, ChevronUp, Sun, LucideBook, Ship, Camera, LocateFixed, Sunrise, MoonStar, Clock3 } from 'lucide-react';
 
 interface PreferenceFormProps {
@@ -14,110 +15,114 @@ interface PreferenceFormProps {
   onLocationChange?: (location: GeoPoint | null) => void;
 }
 
-// Define sub-interests for each main interest
-const interestOptionsWithSubs = [
+// Fallback interest schema when backend schema is unavailable.
+const fallbackInterestOptions: InterestSchemaMainInterest[] = [
   { 
     id: 'nature', 
     label: 'Nature', 
-    icon: Mountain,
     subInterests: [
-      'Eco-tours',
-      'Wilderness trekking',
-      'Volcanic sites',
-      'Caves and canyons'
+      { id: 'eco_tours', label: 'Eco-tours' },
+      { id: 'wilderness_trekking', label: 'Wilderness trekking' },
+      { id: 'volcanic_sites', label: 'Volcanic sites' },
+      { id: 'caves_and_canyons', label: 'Caves and canyons' },
     ]
   },
   { 
     id: 'diving', 
     label: 'Diving and Marine Sports', 
-    icon: Waves,
     subInterests: [
-      'Scuba diving',
-      'Snorkeling',
-      'Wreck diving',
-      'Freediving'
+      { id: 'scuba_diving', label: 'Scuba diving' },
+      { id: 'snorkeling', label: 'Snorkeling' },
+      { id: 'wreck_diving', label: 'Wreck diving' },
+      { id: 'freediving', label: 'Freediving' },
     ]
   },
   { 
     id: 'sun_beach', 
     label: 'Sun and Beach', 
-    icon: Sun,
     subInterests: [
-      'Island hopping',
-      'Beach resorts',
-      'Surfing and skimboarding',
-      'Coastal relaxation'
+      { id: 'island_hopping', label: 'Island hopping' },
+      { id: 'beach_resorts', label: 'Beach resorts' },
+      { id: 'surfing_skimboarding', label: 'Surfing and skimboarding' },
+      { id: 'coastal_relaxation', label: 'Coastal relaxation' },
     ]
   },
   { 
     id: 'health_wellness', 
     label: 'Health and Wellness', 
-    icon: Heart,
     subInterests: [
-      'Spa and retreats',
-      'Medical tourism',
-      'Retirement villages',
-      'Beauty and wellness services'
+      { id: 'spa_retreats', label: 'Spa and retreats' },
+      { id: 'medical_tourism', label: 'Medical tourism' },
+      { id: 'retirement_villages', label: 'Retirement villages' },
+      { id: 'beauty_wellness_services', label: 'Beauty and wellness services' },
     ]
   },
   { 
     id: 'events', 
     label: 'MICE and Events', 
-    icon: Compass,
     subInterests: [
-      'Corporate meetings',
-      'Incentives & Team Building',
-      'Exhibitions',
-      'Conventions'
+      { id: 'corporate_meetings', label: 'Corporate meetings' },
+      { id: 'incentives_team_building', label: 'Incentives & Team Building' },
+      { id: 'exhibitions', label: 'Exhibitions' },
+      { id: 'conventions', label: 'Conventions' },
     ]
   },
   { 
     id: 'culture_heritage', 
     label: 'Culture and Heritage', 
-    icon: Camera,
     subInterests: [
-      'Heritage Tours',
-      'Food tourism',
-      'Culinary Tourism',
-      'Festivals & events'
+      { id: 'heritage_tours', label: 'Heritage Tours' },
+      { id: 'food_tourism', label: 'Food tourism' },
+      { id: 'culinary_tourism', label: 'Culinary Tourism' },
+      { id: 'festivals_events', label: 'Festivals & events' },
     ]
   },
   { 
     id: 'education', 
     label: 'Education', 
-    icon: LucideBook,
     subInterests: [
-      'Study tours',
-      'Historical site learning',
-      'Culinary schools',
-      'Language immersion'
+      { id: 'study_tours', label: 'Study tours' },
+      { id: 'historical_site_learning', label: 'Historical site learning' },
+      { id: 'culinary_schools', label: 'Culinary schools' },
+      { id: 'language_immersion', label: 'Language immersion' },
     ]
   },
   {
     id: 'cruise',
     label: 'Cruise and Nautical Tourism',
-    icon: Ship,
     subInterests: [
-      'Luxury cruises',
-      'Yachting and sailing',
-      'Ferry travel',
-      'Water taxis'
+      { id: 'luxury_cruises', label: 'Luxury cruises' },
+      { id: 'yachting_sailing', label: 'Yachting and sailing' },
+      { id: 'ferry_travel', label: 'Ferry travel' },
+      { id: 'water_taxis', label: 'Water taxis' },
     ]
   },
   {
     id: 'leisure',
     label: 'Leisure and Entertainment',
-    icon: Heart,
     subInterests: [
-      'Theme parks',
-      'Casinos',
-      'Shopping and retail',
-      'Nightlife and bars'
+      { id: 'theme_parks', label: 'Theme parks' },
+      { id: 'casinos', label: 'Casinos' },
+      { id: 'shopping_retail', label: 'Shopping and retail' },
+      { id: 'nightlife_bars', label: 'Nightlife and bars' },
     ]
   }
 ];
 
+const interestIcons: Record<string, ComponentType<{ className?: string }>> = {
+  nature: Mountain,
+  diving: Waves,
+  sun_beach: Sun,
+  health_wellness: Heart,
+  events: Compass,
+  culture_heritage: Camera,
+  education: LucideBook,
+  cruise: Ship,
+  leisure: Heart,
+};
+
 export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormProps) {
+  const [interestOptionsWithSubs, setInterestOptionsWithSubs] = useState<InterestSchemaMainInterest[]>(fallbackInterestOptions);
   const [planningMode, setPlanningMode] = useState<'preferences' | 'budget'>('preferences');
   const [interests, setInterests] = useState<string[]>([]);
   const [mainInterestOrder, setMainInterestOrder] = useState<string[]>([]);
@@ -139,13 +144,35 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
 
   const mainInterestIds = interestOptionsWithSubs.map((option) => option.id);
 
+  useEffect(() => {
+    let active = true;
+    void fetchInterestsSchema()
+      .then((schema) => {
+        if (!active) return;
+        if (schema.length === 0) return;
+        const hasSubInterests = schema.some((entry) => (entry.subInterests ?? []).length > 0);
+        if (!hasSubInterests) {
+          console.warn('Interests schema returned without sub-interests. Using fallback schema.');
+          return;
+        }
+        setInterestOptionsWithSubs(schema);
+      })
+      .catch((error) => {
+        console.error('Failed to load interests schema, using fallback:', error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const toggleInterest = (interest: string) => {
     const isCurrentlySelected = interests.includes(interest);
     
     if (isCurrentlySelected) {
       // Remove main interest and all its sub-interests
       const interestOption = interestOptionsWithSubs.find(opt => opt.id === interest);
-      const subInterestsToRemove = interestOption?.subInterests || [];
+      const subInterestsToRemove = (interestOption?.subInterests ?? []).map((sub) => sub.id);
       setInterests(prev => prev.filter(i => i !== interest && !subInterestsToRemove.includes(i)));
       setMainInterestOrder(prev => prev.filter(id => id !== interest));
       setExpandedInterests(prev => prev.filter(i => i !== interest));
@@ -158,19 +185,19 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
     }
   };
 
-  const toggleSubInterest = (mainInterest: string, subInterest: string) => {
+  const toggleSubInterest = (mainInterest: string, subInterestId: string) => {
     setInterests(prev => {
-      if (prev.includes(subInterest)) {
-        return prev.filter(i => i !== subInterest);
+      if (prev.includes(subInterestId)) {
+        return prev.filter(i => i !== subInterestId);
       } else {
         // Make sure main interest is also selected
         if (!prev.includes(mainInterest)) {
           setMainInterestOrder(order => (order.includes(mainInterest) ? order : [...order, mainInterest]));
           setShowInterestError(false);
-          return [...prev, mainInterest, subInterest];
+          return [...prev, mainInterest, subInterestId];
         }
         setShowInterestError(false);
-        return [...prev, subInterest];
+        return [...prev, subInterestId];
       }
     });
   };
@@ -220,6 +247,8 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
       const autoRankedMainInterests = mainInterestOrder
         .filter((interestId) => mainInterestIds.includes(interestId) && interests.includes(interestId))
         .slice(0, 9);
+      const selectedMainInterests = autoRankedMainInterests;
+      const selectedSubInterests = interests.filter((interestId) => !mainInterestIds.includes(interestId));
 
       const interestRanks = autoRankedMainInterests.reduce<Record<string, number>>((acc, interestId, index) => {
         acc[interestId] = index + 1;
@@ -227,7 +256,9 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
       }, {});
 
       await onSubmit({
-        interests,
+        interests: selectedSubInterests,
+        mainInterests: selectedMainInterests,
+        subInterests: selectedSubInterests,
         ...(Object.keys(interestRanks).length > 0 ? { interestRanks } : {}),
         activityLevel,
         timePreference,
@@ -420,7 +451,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {interestOptionsWithSubs.map(option => {
-              const Icon = option.icon;
+              const Icon = interestIcons[option.id] ?? Heart;
               const isSelected = interests.includes(option.id);
               const isExpanded = expandedInterests.includes(option.id);
               const rankIndex = mainInterestOrder.findIndex((interestId) => interestId === option.id);
@@ -470,18 +501,18 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
                   {/* Sub-interests */}
                   {isSelected && isExpanded && (
                     <div className="ml-4 space-y-2 border-l-2 border-blue-200 py-2 pl-4">
-                      {option.subInterests.map(subInterest => (
-                        <div key={subInterest} className="flex items-center space-x-2 rounded-md px-2 py-1 transition-colors hover:bg-blue-50">
+                      {option.subInterests.map((subInterest) => (
+                        <div key={subInterest.id} className="flex items-center space-x-2 rounded-md px-2 py-1 transition-colors hover:bg-blue-50">
                           <Checkbox
-                            id={`${option.id}-${subInterest}`}
-                            checked={interests.includes(subInterest)}
-                            onCheckedChange={() => toggleSubInterest(option.id, subInterest)}
+                            id={`${option.id}-${subInterest.id}`}
+                            checked={interests.includes(subInterest.id)}
+                            onCheckedChange={() => toggleSubInterest(option.id, subInterest.id)}
                           />
                           <label
-                            htmlFor={`${option.id}-${subInterest}`}
+                            htmlFor={`${option.id}-${subInterest.id}`}
                             className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                           >
-                            {subInterest}
+                            {subInterest.label}
                           </label>
                         </div>
                       ))}

@@ -7,6 +7,17 @@ type DestinationPayload =
   | { data: Destination[] }
   | { destinations: Destination[] };
 
+export type InterestSchemaSubInterest = {
+  id: string;
+  label: string;
+};
+
+export type InterestSchemaMainInterest = {
+  id: string;
+  label: string;
+  subInterests: InterestSchemaSubInterest[];
+};
+
 type RawDestination = Partial<Destination> & {
   _id?: string;
   destinationId?: string;
@@ -33,6 +44,8 @@ type RawDestination = Partial<Destination> & {
   rating_count?: number | string;
   interest?: string[] | string;
   tags?: string[] | string;
+  mainInterests?: string[] | string;
+  main_interests?: string[] | string;
   subInterests?: string[] | string;
   sub_interests?: string[] | string;
   best_time_to_visit?: string[] | string;
@@ -162,6 +175,8 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
     const rating = toNumber(item.rating) ?? 0;
     const reviewCount = toNumber(item.reviewCount) ?? toNumber(item.review_count) ?? toNumber(item.rating_count) ?? 0;
     const interests = normalizeStringArray(item.interests ?? item.interest ?? item.tags);
+    const mainInterests = normalizeStringArray(item.mainInterests ?? item.main_interests);
+    const subInterests = normalizeStringArray(item.subInterests ?? item.sub_interests);
     const bestTimeToVisit = normalizeStringArray(item.bestTimeToVisit ?? item.best_time_to_visit);
 
     return {
@@ -174,6 +189,8 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
       rating,
       reviewCount: Math.max(0, Math.round(reviewCount)),
       interests,
+      mainInterests,
+      subInterests,
       bestTimeToVisit,
       estimatedCost: Math.max(0, estimatedCost),
       location: normalizeLocation(item),
@@ -242,4 +259,105 @@ function normalizeDuration(item: RawDestination): number {
 export async function fetchDestinations(): Promise<Destination[]> {
   const payload = await apiGet<DestinationPayload>('/api/destinations');
   return extractDestinations(payload);
+}
+
+type InterestsSchemaPayload =
+  | InterestSchemaMainInterest[]
+  | {
+      mainInterests?: Array<{
+        id?: unknown;
+        label?: unknown;
+        subInterests?: Array<{ id?: unknown; label?: unknown }>;
+        sub_interests?: Array<{ id?: unknown; label?: unknown }>;
+      }> | Record<string, unknown>;
+      interests?: Array<{
+        id?: unknown;
+        label?: unknown;
+        subInterests?: Array<{ id?: unknown; label?: unknown }>;
+      }> | Record<string, unknown>;
+      data?: unknown;
+    };
+
+function normalizeSchemaId(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim();
+}
+
+function normalizeSchemaLabel(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim();
+}
+
+function humanizeInterestId(id: string): string {
+  return id
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+export async function fetchInterestsSchema(): Promise<InterestSchemaMainInterest[]> {
+  const payload = await apiGet<InterestsSchemaPayload>('/api/destinations/interests-schema');
+  const arraySource = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.mainInterests)
+      ? payload.mainInterests
+      : Array.isArray(payload?.interests)
+        ? payload.interests
+        : [];
+  let source: Array<Record<string, unknown>> = arraySource as Array<Record<string, unknown>>;
+
+  if (source.length === 0 && payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    const mapCandidate =
+      payload.mainInterests && typeof payload.mainInterests === 'object' && !Array.isArray(payload.mainInterests)
+        ? payload.mainInterests
+        : payload.interests && typeof payload.interests === 'object' && !Array.isArray(payload.interests)
+          ? payload.interests
+          : null;
+
+    if (mapCandidate && typeof mapCandidate === 'object') {
+      source = Object.entries(mapCandidate).map(([key, value]) => {
+        const entry = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+        return {
+          id: entry.id ?? key,
+          label: entry.label ?? key,
+          subInterests: entry.subInterests ?? entry.sub_interests,
+          sub_interests: entry.sub_interests ?? entry.subInterests,
+        };
+      });
+    }
+  }
+
+  return source
+    .map((item) => {
+      const entry = item as Record<string, unknown>;
+      const id = normalizeSchemaId(entry.id);
+      const label = normalizeSchemaLabel(entry.label) || id;
+      const subInterestsCandidate = entry.subInterests;
+      const subInterestsLegacyCandidate = entry.sub_interests;
+      const rawSubs = Array.isArray(subInterestsCandidate)
+        ? subInterestsCandidate
+        : Array.isArray(subInterestsLegacyCandidate)
+          ? subInterestsLegacyCandidate
+          : [];
+      const subInterests = rawSubs
+        .map((sub) => {
+          if (typeof sub === 'string') {
+            const subId = normalizeSchemaId(sub);
+            if (!subId) return null;
+            return { id: subId, label: humanizeInterestId(subId) };
+          }
+          const subEntry = sub as Record<string, unknown>;
+          const subId = normalizeSchemaId(subEntry.id);
+          const subLabel =
+            normalizeSchemaLabel(subEntry.label) ||
+            (subId ? humanizeInterestId(subId) : '');
+          if (!subId) return null;
+          return { id: subId, label: subLabel };
+        })
+        .filter((entry): entry is InterestSchemaSubInterest => Boolean(entry));
+      if (!id) return null;
+      return { id, label, subInterests };
+    })
+    .filter((entry): entry is InterestSchemaMainInterest => Boolean(entry));
 }

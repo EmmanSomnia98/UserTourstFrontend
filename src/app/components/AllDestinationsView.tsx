@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Destination } from '@/app/types/destination';
 import { DestinationCard } from '@/app/components/DestinationCard';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import { Input } from '@/app/components/ui/input';
+import { Textarea } from '@/app/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { GeoPoint } from '@/app/utils/travel';
+import { createDestinationComment, DestinationComment, fetchDestinationComments } from '@/app/api/comments';
 import { Search, ArrowLeft } from 'lucide-react';
 
 type AllDestinationsViewProps = {
@@ -13,6 +15,8 @@ type AllDestinationsViewProps = {
   status: 'idle' | 'loading' | 'error';
   onBack: () => void;
   userLocation?: GeoPoint | null;
+  onRateDestination?: (destination: Destination, rating: number) => void;
+  destinationRatings?: Record<string, number>;
 };
 
 export function AllDestinationsView({
@@ -20,9 +24,50 @@ export function AllDestinationsView({
   status,
   onBack,
   userLocation,
+  onRateDestination,
+  destinationRatings,
 }: AllDestinationsViewProps) {
   const [query, setQuery] = useState('');
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
+  const [commentsByDestination, setCommentsByDestination] = useState<Record<string, DestinationComment[]>>({});
+  const [commentDraft, setCommentDraft] = useState('');
+  const [isCommentsLoading, setIsCommentsLoading] = useState(false);
+  const [isPostingComment, setIsPostingComment] = useState(false);
+  const [commentsError, setCommentsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCommentDraft('');
+    setCommentsError(null);
+  }, [selectedDestination?.id]);
+
+  useEffect(() => {
+    if (!selectedDestination) return;
+
+    let active = true;
+    setIsCommentsLoading(true);
+    setCommentsError(null);
+
+    void fetchDestinationComments(selectedDestination.id)
+      .then((items) => {
+        if (!active) return;
+        setCommentsByDestination((prev) => ({
+          ...prev,
+          [selectedDestination.id]: items,
+        }));
+      })
+      .catch((error) => {
+        if (!active) return;
+        setCommentsError(error instanceof Error ? error.message : 'Failed to load comments.');
+      })
+      .finally(() => {
+        if (!active) return;
+        setIsCommentsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedDestination?.id]);
 
   const formatDescriptionLines = (description: string): string[] => {
     return description
@@ -52,6 +97,32 @@ export function AllDestinationsView({
       return searchable.includes(normalizedQuery);
     });
   }, [destinations, query]);
+
+  const selectedComments = selectedDestination ? commentsByDestination[selectedDestination.id] ?? [] : [];
+
+  const handleSubmitComment = async () => {
+    if (!selectedDestination) return;
+    const trimmed = commentDraft.trim();
+    if (!trimmed) return;
+    setIsPostingComment(true);
+    setCommentsError(null);
+
+    try {
+      const created = await createDestinationComment(selectedDestination.id, trimmed);
+      setCommentsByDestination((prev) => {
+        const current = prev[selectedDestination.id] ?? [];
+        return {
+          ...prev,
+          [selectedDestination.id]: [created, ...current].slice(0, 100),
+        };
+      });
+      setCommentDraft('');
+    } catch (error) {
+      setCommentsError(error instanceof Error ? error.message : 'Failed to post comment.');
+    } finally {
+      setIsPostingComment(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -104,7 +175,7 @@ export function AllDestinationsView({
               key={destination.id}
               role="button"
               tabIndex={0}
-              className="cursor-pointer"
+              className="h-full cursor-pointer"
               onClick={() => setSelectedDestination(destination)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
@@ -116,6 +187,8 @@ export function AllDestinationsView({
               <DestinationCard
                 destination={destination}
                 userLocation={userLocation}
+                userRating={destinationRatings?.[destination.id]}
+                onRateDestination={onRateDestination}
               />
             </div>
           ))}
@@ -149,6 +222,51 @@ export function AllDestinationsView({
                       {line}
                     </p>
                   ))}
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 sm:p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-slate-900">Feedback / Comments</p>
+                    <span className="text-xs text-slate-500">{selectedComments.length} comment(s)</span>
+                  </div>
+                  <div className="space-y-2">
+                    <Textarea
+                      value={commentDraft}
+                      onChange={(event) => setCommentDraft(event.target.value)}
+                      placeholder="Share your feedback for this destination..."
+                      maxLength={500}
+                      className="min-h-20 bg-white"
+                      disabled={isPostingComment}
+                    />
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-500">{commentDraft.length}/500</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void handleSubmitComment()}
+                        disabled={!commentDraft.trim() || isPostingComment}
+                      >
+                        {isPostingComment ? 'Posting...' : 'Post Comment'}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
+                    {commentsError && <p className="text-xs text-red-600">{commentsError}</p>}
+                    {isCommentsLoading ? (
+                      <p className="text-xs text-slate-500">Loading comments...</p>
+                    ) : selectedComments.length === 0 ? (
+                      <p className="text-xs text-slate-500">No comments yet. Be the first to leave feedback.</p>
+                    ) : (
+                      selectedComments.map((comment) => (
+                        <div key={comment.id} className="rounded-md border border-slate-200 bg-white px-3 py-2">
+                          <p className="text-sm text-slate-700">{comment.body}</p>
+                          <p className="mt-1 text-[11px] text-slate-400">
+                            {comment.userName ? `${comment.userName} • ` : ''}
+                            {new Date(comment.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
             </>

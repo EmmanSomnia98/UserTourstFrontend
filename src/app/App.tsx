@@ -43,32 +43,6 @@ type AppView =
   | 'all-destinations'
   | 'recommendations';
 
-const DESTINATION_RATINGS_STORAGE_PREFIX = 'bw_destination_ratings_v1';
-
-function getDestinationRatingsStorageKey(user: AuthUser | null): string {
-  const identity = (user?.id || user?.email || 'guest').trim().toLowerCase();
-  return `${DESTINATION_RATINGS_STORAGE_PREFIX}:${identity}`;
-}
-
-function readDestinationRatings(key: string): Record<string, number> {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (!parsed || typeof parsed !== 'object') return {};
-    const normalized: Record<string, number> = {};
-    Object.entries(parsed).forEach(([destinationId, rating]) => {
-      const value = typeof rating === 'number' ? Math.round(rating) : Number(rating);
-      if (Number.isFinite(value) && value >= 0 && value <= 5) {
-        normalized[destinationId] = value;
-      }
-    });
-    return normalized;
-  } catch {
-    return {};
-  }
-}
-
 export default function App() {
   const isMobile = useIsMobile();
   const [currentView, setCurrentView] = useState<AppView>('welcome');
@@ -89,6 +63,7 @@ export default function App() {
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [logoutStep, setLogoutStep] = useState<'confirm' | 'thanks'>('confirm');
   const [userLocation, setUserLocation] = useState<GeoPoint | null>(null);
+  const [activeHeroIndex, setActiveHeroIndex] = useState(0);
   const [locationStatus, setLocationStatus] = useState<
     'idle' | 'requesting' | 'granted' | 'denied' | 'unavailable' | 'error'
   >('idle');
@@ -97,7 +72,6 @@ export default function App() {
     userId: currentUser?.id,
     userEmail: currentUser?.email,
   };
-  const destinationRatingsStorageKey = getDestinationRatingsStorageKey(currentUser);
 
   useEffect(() => {
     const storedToken = getAuthToken();
@@ -157,22 +131,34 @@ export default function App() {
   }, [currentUser?.id, currentUser?.email]);
 
   useEffect(() => {
-    let active = true;
-    const localRatings = readDestinationRatings(destinationRatingsStorageKey);
-    setDestinationRatings(localRatings);
+    if (allDestinations.length === 0) {
+      setActiveHeroIndex(0);
+      return;
+    }
 
-    if (!isAuthenticated) return () => { active = false; };
+    setActiveHeroIndex((prev) => prev % allDestinations.length);
+    const timer = window.setInterval(() => {
+      setActiveHeroIndex((prev) => (prev + 1) % allDestinations.length);
+    }, 5000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [allDestinations.length]);
+
+  useEffect(() => {
+    let active = true;
+    setDestinationRatings({});
+    if (!isAuthenticated) {
+      return () => {
+        active = false;
+      };
+    }
 
     void fetchMyDestinationRatings()
       .then((serverRatings) => {
         if (!active) return;
-        const merged = { ...serverRatings, ...localRatings };
-        setDestinationRatings(merged);
-        try {
-          localStorage.setItem(destinationRatingsStorageKey, JSON.stringify(merged));
-        } catch {
-          // Ignore storage failures.
-        }
+        setDestinationRatings(serverRatings);
       })
       .catch((error) => {
         if (!active) return;
@@ -182,7 +168,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [destinationRatingsStorageKey, isAuthenticated]);
+  }, [isAuthenticated]);
 
   const trackEvent = (
     eventType: Parameters<typeof buildFeedbackEvent>[0],
@@ -355,45 +341,97 @@ export default function App() {
   };
 
   const handleRateDestination = (destination: Destination, rating: number) => {
+    if (!isAuthenticated) return;
+
+    const refreshDestinationAggregatesFromServer = () => {
+      void fetchDestinations()
+        .then((freshDestinations) => {
+          setAllDestinations(freshDestinations);
+          const byId = new Map(freshDestinations.map((item) => [item.id, item]));
+          const apply = (item: Destination): Destination => {
+            const fresh = byId.get(item.id);
+            return fresh
+              ? {
+                  ...item,
+                  rating: fresh.rating,
+                  reviewCount: fresh.reviewCount,
+                }
+              : item;
+          };
+          setRecommendations((prev) => prev.map(apply));
+          setItinerary((prev) => prev.map(apply));
+        })
+        .catch((error) => {
+          console.error('Failed to refresh destination aggregates:', error);
+        });
+    };
+
+    const applyDestinationAggregate = (
+      destinationId: string,
+      aggregateRating?: number,
+      aggregateReviewCount?: number
+    ) => {
+      if (aggregateRating === undefined && aggregateReviewCount === undefined) {
+        refreshDestinationAggregatesFromServer();
+        return;
+      }
+      const apply = (item: Destination): Destination =>
+        item.id === destinationId
+          ? {
+              ...item,
+              rating: aggregateRating ?? item.rating,
+              reviewCount: aggregateReviewCount ?? item.reviewCount,
+            }
+          : item;
+
+      setAllDestinations((prev) => prev.map(apply));
+      setRecommendations((prev) => prev.map(apply));
+      setItinerary((prev) => prev.map(apply));
+    };
+
+    const previousRating = destinationRatings[destination.id] ?? 0;
     const requestedRating = Math.max(1, Math.min(5, Math.round(rating)));
-    setDestinationRatings((prev) => {
-      const previousRating = prev[destination.id];
-      const nextRating = previousRating === requestedRating ? 0 : requestedRating;
+    const nextRating = previousRating === requestedRating ? 0 : requestedRating;
 
-      const next = {
-        ...prev,
-        [destination.id]: nextRating,
-      };
-      try {
-        localStorage.setItem(destinationRatingsStorageKey, JSON.stringify(next));
-      } catch {
-        // Ignore storage failures.
-      }
-
-      trackEvent('destination_rated', {
-        destinationId: destination.id,
-        metadata: {
-          rating: nextRating,
-          cleared: nextRating === 0,
-          previousRating,
-          recommendationRequestId: lastRecommendationRequestId,
-          modelVersion: lastRecommendationModelVersion,
-        },
-      });
-
-      if (isAuthenticated) {
-        if (nextRating > 0) {
-          void upsertDestinationRating(destination.id, nextRating).catch((error) => {
-            console.error('Failed to sync destination rating:', error);
-          });
-        } else {
-          void clearDestinationRating(destination.id).catch((error) => {
-            console.error('Failed to clear destination rating:', error);
-          });
-        }
-      }
-      return next;
+    trackEvent('destination_rated', {
+      destinationId: destination.id,
+      metadata: {
+        rating: nextRating,
+        cleared: nextRating === 0,
+        previousRating,
+        recommendationRequestId: lastRecommendationRequestId,
+        modelVersion: lastRecommendationModelVersion,
+      },
     });
+
+    if (nextRating > 0) {
+      void upsertDestinationRating(destination.id, nextRating)
+        .then((result) => {
+          setDestinationRatings((prev) => ({
+            ...prev,
+            [result.destinationId]: result.rating,
+          }));
+          applyDestinationAggregate(result.destinationId, result.aggregateRating, result.reviewCount);
+          refreshDestinationAggregatesFromServer();
+        })
+        .catch((error) => {
+          console.error('Failed to sync destination rating:', error);
+        });
+      return;
+    }
+
+    void clearDestinationRating(destination.id)
+      .then((result) => {
+        setDestinationRatings((prev) => ({
+          ...prev,
+          [result.destinationId]: 0,
+        }));
+        applyDestinationAggregate(result.destinationId, result.rating, result.reviewCount);
+        refreshDestinationAggregatesFromServer();
+      })
+      .catch((error) => {
+        console.error('Failed to clear destination rating:', error);
+      });
   };
 
   const handleReset = () => {
@@ -801,29 +839,76 @@ export default function App() {
 
             {showHeroGrid ? (
               <div className="max-w-5xl mx-auto">
-                <div
-                  className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-1"
-                >
-                  {allDestinations.map((destination, index) => (
-                    <div
-                      key={destination.id ?? `${destination.name}-${index}`}
-                      className="group relative h-56 min-w-[260px] snap-start overflow-hidden rounded-xl border border-white/50 bg-black shadow-lg transition duration-300 ease-out hover:-translate-y-1 hover:shadow-2xl md:h-64 md:min-w-[320px]"
-                    >
-                      <img
-                        src={destination.image}
-                        alt={destination.name}
-                        className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-110 group-hover:brightness-90"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent opacity-90 transition duration-300 group-hover:opacity-100" />
-                      <div className="absolute inset-x-0 bottom-0 translate-y-1 p-4 transition duration-300 group-hover:translate-y-0">
-                        <p className="text-base font-semibold text-white drop-shadow-sm">{destination.name}</p>
-                        <p className="mt-1 text-xs tracking-wide text-white/80 opacity-0 transition duration-300 group-hover:opacity-100">
-                          Hover to preview
-                        </p>
+                <>
+                  {(() => {
+                    const total = allDestinations.length;
+                    if (total === 1) {
+                      const destination = allDestinations[0];
+                      return (
+                        <div className="mx-auto max-w-[720px]">
+                          <div className="relative h-56 overflow-hidden rounded-2xl border border-white/60 bg-black shadow-xl sm:h-64">
+                            <img src={destination.image} alt={destination.name} className="h-full w-full object-cover" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                            <div className="absolute inset-x-0 bottom-0 p-4">
+                              <p className="text-lg font-semibold text-white sm:text-xl">{destination.name}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    const leftIndex = (activeHeroIndex - 1 + total) % total;
+                    const centerIndex = activeHeroIndex % total;
+                    const rightIndex = (activeHeroIndex + 1) % total;
+                    const slots = [leftIndex, centerIndex, rightIndex];
+
+                    return (
+                      <div className="overflow-hidden pb-2">
+                        <div className="flex items-center justify-center gap-2 sm:gap-4">
+                          {slots.map((destinationIndex, slotIndex) => {
+                            const destination = allDestinations[destinationIndex];
+                            const isCenter = slotIndex === 1;
+                            return (
+                              <div
+                                key={`hero-slot-${slotIndex}-${destination.id ?? destination.name}`}
+                                className={`relative overflow-hidden rounded-2xl border border-white/60 bg-black transition-all duration-700 ease-out ${
+                                  isCenter
+                                    ? 'h-56 w-[64vw] scale-100 opacity-100 shadow-2xl sm:h-64 sm:w-[380px]'
+                                    : 'h-48 w-[48vw] scale-95 opacity-85 shadow-lg sm:h-56 sm:w-[320px]'
+                                }`}
+                              >
+                                <img
+                                  src={destination.image}
+                                  alt={destination.name}
+                                  className="h-full w-full object-cover transition-transform duration-700 ease-out"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                                <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4">
+                                  <p className={`text-white drop-shadow-sm ${isCenter ? 'text-base font-semibold sm:text-2xl' : 'text-sm font-medium sm:text-lg'}`}>
+                                    {destination.name}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    );
+                  })()}
+                  <div className="mt-2 flex items-center justify-center gap-2">
+                    {allDestinations.map((destination, index) => (
+                      <button
+                        key={`hero-dot-${destination.id ?? destination.name}-${index}`}
+                        type="button"
+                        onClick={() => setActiveHeroIndex(index)}
+                        className={`h-2.5 rounded-full transition-all duration-300 ${
+                          index === activeHeroIndex ? 'w-6 bg-slate-900' : 'w-2.5 bg-white/80'
+                        }`}
+                        aria-label={`Show destination ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                </>
               </div>
             ) : (
               <div className="max-w-5xl mx-auto">
@@ -974,7 +1059,7 @@ export default function App() {
             preferences={preferences}
             itinerary={itinerary}
             onAddToItinerary={handleAddToItinerary}
-            onRateDestination={handleRateDestination}
+            onRateDestination={isAuthenticated ? handleRateDestination : undefined}
             onViewItinerary={handleViewItinerary}
             onRestart={handleReset}
             recommendationScores={recommendationScores}
@@ -993,7 +1078,7 @@ export default function App() {
             onReset={handleReset}
             onViewSavedItineraries={() => setCurrentView('saved-itineraries')}
             onSaveSuccess={handleItinerarySaved}
-            onRateDestination={handleRateDestination}
+            onRateDestination={isAuthenticated ? handleRateDestination : undefined}
             destinationRatings={destinationRatings}
             userLocation={userLocation}
           />
@@ -1015,6 +1100,8 @@ export default function App() {
             destinations={allDestinations}
             status={destinationsStatus}
             userLocation={userLocation}
+            onRateDestination={isAuthenticated ? handleRateDestination : undefined}
+            destinationRatings={destinationRatings}
             onBack={() => setCurrentView('welcome')}
           />
         )}
@@ -1025,7 +1112,7 @@ export default function App() {
             allDestinations={allDestinations}
             currentUserId={currentUser?.id}
             userLocation={userLocation}
-            onRateDestination={handleRateDestination}
+            onRateDestination={isAuthenticated ? handleRateDestination : undefined}
             destinationRatings={destinationRatings}
             onBack={() => setCurrentView('saved-itineraries')}
             onSaveChangesSuccess={(savedItinerary) => {

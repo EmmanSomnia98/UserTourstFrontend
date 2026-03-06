@@ -45,7 +45,7 @@ export function DestinationCard({
   };
 
   return (
-    <Card className="overflow-hidden hover:shadow-lg transition-shadow">
+    <Card className="h-full overflow-hidden transition-shadow hover:shadow-lg flex flex-col">
       <div className="relative h-40 sm:h-48 overflow-hidden">
         <img
           src={destination.image}
@@ -60,7 +60,7 @@ export function DestinationCard({
         )}
       </div>
       
-      <div className="p-4 space-y-3">
+      <div className="p-4 space-y-3 flex-1 flex flex-col">
         <div className="space-y-2">
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-semibold text-base sm:text-lg">{destination.name}</h3>
@@ -136,7 +136,7 @@ export function DestinationCard({
           <Button
             onClick={() => onAddToItinerary(destination)}
             disabled={isInItinerary}
-            className="w-full"
+            className="w-full mt-auto"
             variant={isInItinerary ? "secondary" : "default"}
           >
             {isInItinerary ? (

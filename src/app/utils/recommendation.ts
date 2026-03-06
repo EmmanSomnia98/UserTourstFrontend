@@ -61,10 +61,14 @@ function calculateInterestMatchBreakdown(destination: Destination, preferences: 
   weightedMatchUnits: number;
   bestRank: number | null;
 } {
-  const destinationInterests = (destination.interests ?? [])
+  const destinationInterests = (
+    destination.subInterests && destination.subInterests.length > 0 ? destination.subInterests : destination.interests
+  )
     .map(normalizeInterest)
     .filter(Boolean);
-  const userInterests = (preferences.interests ?? [])
+  const userInterests = (
+    preferences.subInterests && preferences.subInterests.length > 0 ? preferences.subInterests : preferences.interests
+  )
     .map(normalizeInterest)
     .filter(Boolean);
   const rankMap = buildNormalizedRankMap(preferences.interestRanks);
@@ -244,7 +248,11 @@ export function calculateItinerarySchedule(
 
   const rankedDestinations = [...selectedDestinations]
     .map((destination, originalIndex) => {
-      const destinationInterests = (destination.interests ?? []).map(normalizeInterest).filter(Boolean);
+      const destinationInterests = (
+        destination.subInterests && destination.subInterests.length > 0 ? destination.subInterests : destination.interests
+      )
+        .map(normalizeInterest)
+        .filter(Boolean);
       let matchCount = 0;
       let bestPriority = Number.POSITIVE_INFINITY;
 

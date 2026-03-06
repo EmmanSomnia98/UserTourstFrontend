@@ -9,6 +9,8 @@ export interface Destination {
   rating: number;
   reviewCount: number;
   interests: string[];
+  mainInterests?: string[];
+  subInterests?: string[];
   bestTimeToVisit: string[];
   estimatedCost: number;
   location: {
@@ -19,6 +21,8 @@ export interface Destination {
 
 export interface UserPreferences {
   interests: string[];
+  mainInterests?: string[];
+  subInterests?: string[];
   interestRanks?: Record<string, number>;
   activityLevel: 'relaxed' | 'moderate' | 'active';
   timePreference?: 'day_only' | 'night_only' | 'whole_day';

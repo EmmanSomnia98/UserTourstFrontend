@@ -18,7 +18,7 @@ export function UserLogin({ onLogin, onBack }: UserLoginProps) {
 
   return (
     <div className="flex min-h-[70vh] items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-lg">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-lg transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-xl">
         <div className="space-y-2 text-center">
           <h2 className="text-2xl font-semibold text-slate-900">Sign In</h2>
           <p className="text-sm text-slate-500">Welcome back to Bulusan Wanderer!</p>
@@ -49,7 +49,7 @@ export function UserLogin({ onLogin, onBack }: UserLoginProps) {
                 type="email"
                 placeholder="you@email.com"
                 autoComplete="email"
-                className="pl-9"
+                className="pl-9 transition-colors duration-200 hover:border-slate-400 focus-visible:ring-blue-200"
                 required
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
@@ -66,7 +66,7 @@ export function UserLogin({ onLogin, onBack }: UserLoginProps) {
                 type="password"
                 placeholder="Enter your password"
                 autoComplete="current-password"
-                className="pl-9"
+                className="pl-9 transition-colors duration-200 hover:border-slate-400 focus-visible:ring-blue-200"
                 required
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
@@ -81,11 +81,20 @@ export function UserLogin({ onLogin, onBack }: UserLoginProps) {
           )}
 
           <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-            <Button type="submit" className="h-11 w-full gap-2 bg-emerald-700 text-white hover:bg-emerald-800" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              className="h-11 w-full gap-2 bg-emerald-700 text-white transition-all duration-300 ease-out hover:-translate-y-0.5 hover:bg-emerald-800 hover:shadow-md"
+              disabled={isSubmitting}
+            >
               Sign in
               <ArrowRight className="h-4 w-4" />
             </Button>
-            <Button type="button" variant="outline" className="h-11 w-full" onClick={onBack}>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-full transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md"
+              onClick={onBack}
+            >
               Back to Home
             </Button>
           </div>

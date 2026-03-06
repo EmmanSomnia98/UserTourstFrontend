@@ -115,15 +115,29 @@ export async function fetchServerRecommendations(
   limit = 6,
   allDestinations: Destination[] = []
 ): Promise<ServerRecommendationsResult> {
+  const selectedMainInterests = preferences.mainInterests ?? [];
+  const selectedSubInterests = preferences.subInterests ?? preferences.interests ?? [];
+  const preferencePayload = {
+    mainInterests: selectedMainInterests,
+    subInterests: selectedSubInterests,
+    // Legacy compatibility
+    interests: selectedSubInterests,
+    interestRanks: preferences.interestRanks ?? {},
+    activityLevel: preferences.activityLevel,
+    timePreference: preferences.timePreference ?? 'whole_day',
+    matchMode: 'strict' as const,
+  };
   const maxBudget = Math.max(1, Math.round(preferences.budget * Math.max(1, preferences.duration)));
   const days = Math.max(1, Math.floor(preferences.duration));
   const hasBudget = Number.isFinite(preferences.budget) && preferences.budget > 0;
   const constrainedBody = {
+    ...preferencePayload,
     budgetMode: 'constrained' as const,
     maxBudget,
     days,
   };
   const unconstrainedBody = {
+    ...preferencePayload,
     budgetMode: 'unconstrained' as const,
     days,
   };
@@ -131,9 +145,9 @@ export async function fetchServerRecommendations(
   // Backend requires `budgetMode`; keep retries compatible without sending known-invalid payloads.
   const requestCandidates = [
     hasBudget ? constrainedBody : unconstrainedBody,
-    { budgetMode: hasBudget ? 'constrained' : 'unconstrained', maxBudget, days },
-    { budgetMode: hasBudget ? 'constrained' : 'unconstrained', days },
-    ...(hasBudget ? [{ budgetMode: 'constrained' as const, maxBudget }] : []),
+    { ...preferencePayload, budgetMode: hasBudget ? 'constrained' : 'unconstrained', maxBudget, days },
+    { ...preferencePayload, budgetMode: hasBudget ? 'constrained' : 'unconstrained', days },
+    ...(hasBudget ? [{ ...preferencePayload, budgetMode: 'constrained' as const, maxBudget }] : []),
   ];
 
   let payload: RecommendationsPayload | null = null;
