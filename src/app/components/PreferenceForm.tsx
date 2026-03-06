@@ -140,7 +140,9 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
     'idle' | 'requesting' | 'granted' | 'denied' | 'unavailable' | 'error'
   >('idle');
   const [locationMessage, setLocationMessage] = useState<string>('');
-  const preferenceBudgetFallback = 5000;
+  // In Preferences mode, do not enforce a budget cap.
+  // This keeps recommendations driven by interests/activity/time preference.
+  const preferenceBudgetFallback = 0;
 
   const mainInterestIds = interestOptionsWithSubs.map((option) => option.id);
 
