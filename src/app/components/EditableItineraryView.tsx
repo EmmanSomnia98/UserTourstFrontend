@@ -7,7 +7,7 @@ import { Badge } from '@/app/components/ui/badge';
 import { Separator } from '@/app/components/ui/separator';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
-import { Calendar, Clock, Trash2, Plus, Save, X, Edit2, Wallet, Star, Map } from 'lucide-react';
+import { Calendar, Clock, Trash2, Plus, Save, X, Edit2, Wallet, Star, Map as MapIcon } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { createItinerary, deleteRemoteItinerary } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
@@ -443,7 +443,7 @@ export function EditableItineraryView({
                     window.open(dayRouteUrl, '_blank', 'noopener,noreferrer');
                   }}
                 >
-                  <Map className="mr-2 h-4 w-4" />
+                  <MapIcon className="mr-2 h-4 w-4" />
                   View Day on Map
                 </Button>
               </div>
