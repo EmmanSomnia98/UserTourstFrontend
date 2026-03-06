@@ -98,7 +98,11 @@ export function SavedItinerariesView({
             }
           </p>
         </div>
-        <Button variant="outline" onClick={onBackToWelcome}>
+        <Button
+          variant="outline"
+          className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md"
+          onClick={onBackToWelcome}
+        >
           Back to Home
         </Button>
       </div>
@@ -135,18 +139,22 @@ export function SavedItinerariesView({
       {savedItineraries.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {savedItineraries.map((itinerary, index) => (
-            <Card key={itinerary.id ?? `${itinerary.name}-${index}`} className="overflow-hidden hover:shadow-lg transition-shadow">
+            <Card
+              key={itinerary.id ?? `${itinerary.name}-${index}`}
+              className="group overflow-hidden border border-white/70 transition-all duration-300 ease-out hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl"
+            >
               {/* Card Header with Image */}
               <div className="relative h-48 bg-gradient-to-br from-blue-400 to-green-400">
                 {itinerary.destinations[0]?.image && (
                   <img 
                     src={itinerary.destinations[0].image} 
                     alt={itinerary.destinations[0].name}
-                    className="w-full h-full object-cover"
+                    className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-105"
                   />
                 )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-70 transition-opacity duration-300 group-hover:opacity-100" />
                 <div className="absolute top-4 right-4">
-                  <Badge className="bg-white text-gray-900">
+                  <Badge className="bg-white text-gray-900 shadow-sm transition-all duration-300 group-hover:shadow">
                     {itinerary.tripDays} {itinerary.tripDays === 1 ? 'Day' : 'Days'}
                   </Badge>
                 </div>
@@ -176,12 +184,16 @@ export function SavedItinerariesView({
                   <p className="text-xs text-gray-500 mb-2">Includes:</p>
                   <div className="flex flex-wrap gap-1">
                     {itinerary.destinations.slice(0, 3).map((dest, destIndex) => (
-                      <Badge key={dest.id ?? `${dest.name}-${destIndex}`} variant="outline" className="text-xs">
+                      <Badge
+                        key={dest.id ?? `${dest.name}-${destIndex}`}
+                        variant="outline"
+                        className="text-xs transition-colors duration-200 hover:bg-slate-100"
+                      >
                         {dest.name}
                       </Badge>
                     ))}
                     {itinerary.destinations.length > 3 && (
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="text-xs transition-colors duration-200 hover:bg-slate-100">
                         +{itinerary.destinations.length - 3} more
                       </Badge>
                     )}
@@ -191,7 +203,7 @@ export function SavedItinerariesView({
                 {/* Actions */}
                 <div className="flex gap-2 pt-2">
                   <Button 
-                    className="flex-1"
+                    className="flex-1 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md"
                     onClick={() => onViewItinerary(itinerary)}
                     variant="outline"
                   >
@@ -199,7 +211,7 @@ export function SavedItinerariesView({
                     View Itinerary
                   </Button>
                   <Button 
-                    className="flex-1"
+                    className="flex-1 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md"
                     onClick={() => onEditItinerary(itinerary)}
                   >
                     <Edit className="w-4 h-4 mr-2" />
@@ -208,6 +220,7 @@ export function SavedItinerariesView({
                   <Button 
                     variant="outline"
                     size="icon"
+                    className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-red-300 hover:bg-red-50"
                     onClick={() => setPendingDeleteId(itinerary.id)}
                     disabled={deletingId === itinerary.id}
                     title={deletingId === itinerary.id ? 'Deleting itinerary...' : 'Delete itinerary'}

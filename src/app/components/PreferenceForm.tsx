@@ -296,7 +296,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
             <button
               type="button"
               onClick={() => setPlanningMode('preferences')}
-              className={`rounded-lg border-2 px-4 py-3 text-left transition-all ${
+              className={`rounded-lg border-2 px-4 py-3 text-left transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md ${
                 planningMode === 'preferences'
                   ? 'border-blue-500 bg-blue-50'
                   : 'border-gray-200 hover:border-gray-300'
@@ -310,7 +310,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
             <button
               type="button"
               onClick={() => setPlanningMode('budget')}
-              className={`rounded-lg border-2 px-4 py-3 text-left transition-all ${
+              className={`rounded-lg border-2 px-4 py-3 text-left transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md ${
                 planningMode === 'budget'
                   ? 'border-blue-500 bg-blue-50'
                   : 'border-gray-200 hover:border-gray-300'
@@ -326,7 +326,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
 
         <div className="space-y-4">
           <Label className="text-lg">Location Access</Label>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 transition-all duration-300 ease-out hover:border-slate-300 hover:shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-1">
                 <p className="text-sm text-slate-700">
@@ -387,7 +387,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
                   key={option.id}
                   type="button"
                   onClick={() => setTimePreference(option.id as 'day_only' | 'night_only' | 'whole_day')}
-                  className={`rounded-lg border-2 px-4 py-3 text-left transition-all ${
+                  className={`rounded-lg border-2 px-4 py-3 text-left transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md ${
                     isSelected
                       ? 'border-blue-500 bg-blue-50 text-blue-700'
                       : 'border-gray-200 hover:border-gray-300 text-gray-700'
@@ -432,7 +432,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
                     <button
                       type="button"
                       onClick={() => toggleInterest(option.id)}
-                      className={`flex-1 flex items-center justify-between gap-3 p-4 rounded-lg border-2 transition-all ${
+                      className={`flex-1 flex items-center justify-between gap-3 rounded-lg border-2 p-4 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md ${
                         isSelected
                           ? 'border-blue-500 bg-blue-50'
                           : 'border-gray-200 hover:border-gray-300'
@@ -450,7 +450,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
                             e.stopPropagation();
                             toggleExpanded(option.id);
                           }}
-                          className="p-1 hover:bg-blue-100 rounded cursor-pointer"
+                          className="cursor-pointer rounded p-1 transition-colors hover:bg-blue-100"
                         >
                           {isExpanded ? (
                             <ChevronUp className="w-4 h-4 text-blue-500" />
@@ -469,9 +469,9 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
                   
                   {/* Sub-interests */}
                   {isSelected && isExpanded && (
-                    <div className="ml-4 pl-4 border-l-2 border-blue-200 space-y-2 py-2">
+                    <div className="ml-4 space-y-2 border-l-2 border-blue-200 py-2 pl-4">
                       {option.subInterests.map(subInterest => (
-                        <div key={subInterest} className="flex items-center space-x-2">
+                        <div key={subInterest} className="flex items-center space-x-2 rounded-md px-2 py-1 transition-colors hover:bg-blue-50">
                           <Checkbox
                             id={`${option.id}-${subInterest}`}
                             checked={interests.includes(subInterest)}
@@ -506,7 +506,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
                 value={budget}
                 onChange={(e) => setBudget(e.target.value)}
                 placeholder="Enter your budget per activity"
-                className="text-lg"
+                className="text-lg transition-colors hover:border-slate-400 focus-visible:ring-blue-200"
               />
               <p className="text-sm text-gray-600">
                 Set your maximum budget per activity. Activities within this range will be prioritized.
@@ -526,7 +526,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
               value={duration}
               onChange={(e) => setDuration(e.target.value)}
               placeholder="Enter number of days"
-              className="text-lg"
+              className="text-lg transition-colors hover:border-slate-400 focus-visible:ring-blue-200"
             />
             <p className="text-sm text-gray-600">
               How many days will you be staying in Bulusan? (1-30 days)
@@ -537,7 +537,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
         <Button
           type="submit"
           size="lg"
-          className="w-full"
+          className="w-full transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lg"
           disabled={isSubmitting}
         >
           {isSubmitting ? 'Generating Itinerary...' : 'Get My Personalized Itinerary'}

@@ -7,13 +7,14 @@ import { Badge } from '@/app/components/ui/badge';
 import { Separator } from '@/app/components/ui/separator';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
-import { Calendar, Clock, Trash2, Plus, Save, X, Edit2, Wallet, Star } from 'lucide-react';
+import { Calendar, Clock, Trash2, Plus, Save, X, Edit2, Wallet, Star, Map } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { createItinerary, deleteRemoteItinerary } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
 import { inviteCollaboratorToItinerary, pushItinerarySync } from '@/app/api/collaboration';
 import { useItineraryCollaboration } from '@/app/hooks/use-itinerary-collaboration';
 import { GeoPoint } from '@/app/utils/travel';
+import { buildGoogleMapsRouteUrl, getDaySegmentDistances } from '@/app/utils/google-maps';
 
 interface EditableItineraryViewProps {
   savedItinerary: SavedItinerary;
@@ -239,7 +240,7 @@ export function EditableItineraryView({
   return (
     <div className="space-y-6">
       {/* Header with editable name */}
-      <Card className="p-6">
+      <Card className="p-6 transition-all duration-300 ease-out hover:shadow-lg">
         <div className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex-1">
@@ -259,12 +260,13 @@ export function EditableItineraryView({
                       }
                     }}
                   />
-                  <Button size="sm" onClick={handleSaveName}>
+                  <Button size="sm" className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm" onClick={handleSaveName}>
                     <Save className="w-4 h-4" />
                   </Button>
                   <Button 
                     size="sm" 
                     variant="ghost" 
+                    className="transition-all duration-300 ease-out hover:-translate-y-0.5"
                     onClick={() => {
                       setItineraryName(savedItinerary.name);
                       setIsEditingName(false);
@@ -279,6 +281,7 @@ export function EditableItineraryView({
                   <Button 
                     size="sm" 
                     variant="ghost"
+                    className="transition-all duration-300 ease-out hover:-translate-y-0.5"
                     onClick={() => setIsEditingName(true)}
                   >
                     <Edit2 className="w-4 h-4" />
@@ -291,12 +294,16 @@ export function EditableItineraryView({
             </div>
             <div className="flex flex-wrap gap-2">
               {hasChanges && (
-                <Button onClick={() => void handleSaveChanges()} disabled={isSaving}>
+                <Button className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md" onClick={() => void handleSaveChanges()} disabled={isSaving}>
                   <Save className="w-4 h-4 mr-2" />
                   {isSaving ? 'Saving...' : 'Save Changes'}
                 </Button>
               )}
-              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(true)}>
+              <Button
+                variant="outline"
+                className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-red-300 hover:bg-red-50"
+                onClick={() => setIsDeleteDialogOpen(true)}
+              >
                 <Trash2 className="w-4 h-4 mr-2 text-red-500" />
                 Delete
               </Button>
@@ -320,7 +327,7 @@ export function EditableItineraryView({
                   value={inviteQuery}
                   onChange={(event) => setInviteQuery(event.target.value)}
                   placeholder="Invite by username/email"
-                  className="h-9 min-w-56 rounded-md border border-slate-300 px-3 text-sm focus:border-blue-500 focus:outline-none"
+                  className="h-9 min-w-56 rounded-md border border-slate-300 px-3 text-sm transition-colors hover:border-slate-400 focus:border-blue-500 focus:outline-none"
                 />
                 <Button
                   size="sm"
@@ -336,17 +343,17 @@ export function EditableItineraryView({
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
+            <div className="text-center p-4 bg-blue-50 rounded-lg transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm">
               <Calendar className="w-6 h-6 mx-auto mb-2 text-blue-600" />
               <div className="text-2xl font-semibold">{tripDays}</div>
               <div className="text-sm text-gray-600">Days</div>
             </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
+            <div className="text-center p-4 bg-green-50 rounded-lg transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm">
               <Clock className="w-6 h-6 mx-auto mb-2 text-green-600" />
               <div className="text-2xl font-semibold">{totalDuration}h</div>
               <div className="text-sm text-gray-600">Total Time</div>
             </div>
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
+            <div className="text-center p-4 bg-purple-50 rounded-lg transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm">
               <Wallet className="w-6 h-6 mx-auto mb-2 text-purple-600" />
               <div className="text-2xl font-semibold">{formatPeso(totalCost)}</div>
               <div className="text-sm text-gray-600">Est. Cost</div>
@@ -356,11 +363,11 @@ export function EditableItineraryView({
       </Card>
 
       {/* Add Destinations Section */}
-      <Card className="p-6">
+      <Card className="p-6 transition-all duration-300 ease-out hover:shadow-lg">
         <Button
           onClick={() => setShowAddDestinations(!showAddDestinations)}
           variant="outline"
-          className="w-full"
+          className="w-full transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md"
         >
           <Plus className="w-4 h-4 mr-2" />
           {showAddDestinations ? 'Hide Available Destinations' : 'Add More Destinations'}
@@ -369,12 +376,12 @@ export function EditableItineraryView({
         {showAddDestinations && availableDestinations.length > 0 && (
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             {availableDestinations.map((dest, index) => (
-              <Card key={dest.id ?? `${dest.name}-${index}`} className="p-4 hover:shadow-md transition-shadow">
+              <Card key={dest.id ?? `${dest.name}-${index}`} className="group p-4 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md">
                 <div className="flex gap-4">
                   <img
                     src={dest.image}
                     alt={dest.name}
-                    className="w-20 h-20 object-cover rounded-lg flex-shrink-0"
+                    className="w-20 h-20 object-cover rounded-lg flex-shrink-0 transition-transform duration-300 group-hover:scale-105"
                   />
                   <div className="flex-1 space-y-2">
                     <div>
@@ -390,6 +397,7 @@ export function EditableItineraryView({
                   </div>
                   <Button
                     size="sm"
+                    className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm"
                     onClick={() => handleAddDestination(dest)}
                   >
                     <Plus className="w-4 h-4" />
@@ -410,16 +418,47 @@ export function EditableItineraryView({
       {/* Day by Day Schedule */}
       {destinations.length > 0 ? (
         Array.from(schedule.entries()).map(([day, dayDestinations]) => (
-          <Card key={day} className="p-6">
+          <Card key={day} className="p-6 transition-all duration-300 ease-out hover:shadow-lg">
+            {(() => {
+              const dayRouteUrl = buildGoogleMapsRouteUrl(dayDestinations, { origin: userLocation });
+              const daySegments = getDaySegmentDistances(dayDestinations);
+              return (
             <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center font-semibold">
-                  {day}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center font-semibold">
+                    {day}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">Day {day}</h3>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-lg">Day {day}</h3>
-                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!dayRouteUrl}
+                  className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                  onClick={() => {
+                    if (!dayRouteUrl) return;
+                    window.open(dayRouteUrl, '_blank', 'noopener,noreferrer');
+                  }}
+                >
+                  <Map className="mr-2 h-4 w-4" />
+                  View Day on Map
+                </Button>
               </div>
+              {daySegments.length > 0 && (
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Between destinations</p>
+                  <div className="mt-1 space-y-1">
+                    {daySegments.map((segment, segmentIndex) => (
+                      <p key={`${day}-${segment.fromName}-${segment.toName}-${segmentIndex}`} className="text-xs text-slate-700">
+                        {segment.fromName} → {segment.toName}: <span className="font-medium">{segment.distanceLabel}</span>
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-3 ml-6 border-l-2 border-gray-200 pl-6">
                 {dayDestinations.length === 0 && (
@@ -432,7 +471,7 @@ export function EditableItineraryView({
                     <div className="absolute -left-8 top-4 w-4 h-4 bg-white border-2 border-blue-500 rounded-full"></div>
                     
                     <Card
-                      className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+                      className="group p-4 cursor-pointer transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md"
                       role="button"
                       tabIndex={0}
                       onClick={() => setSelectedDestination(dest)}
@@ -448,7 +487,7 @@ export function EditableItineraryView({
                           <img
                             src={dest.image}
                             alt={dest.name}
-                            className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg flex-shrink-0"
+                            className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg flex-shrink-0 transition-transform duration-300 group-hover:scale-105"
                           />
                           <div className="flex-1 space-y-2">
                             <div>
@@ -516,7 +555,7 @@ export function EditableItineraryView({
                               event.stopPropagation();
                               handleRemoveDestination(dest.id);
                             }}
-                            className="flex-shrink-0"
+                            className="flex-shrink-0 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:bg-red-50"
                           >
                             <Trash2 className="w-4 h-4 text-red-500" />
                           </Button>
@@ -527,6 +566,8 @@ export function EditableItineraryView({
                 ))}
               </div>
             </div>
+              );
+            })()}
           </Card>
         ))
       ) : (
@@ -536,7 +577,7 @@ export function EditableItineraryView({
       )}
 
       {/* Actions */}
-      <Card className="p-6">
+      <Card className="p-6 transition-all duration-300 ease-out hover:shadow-lg">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h4 className="font-semibold">Done editing?</h4>
@@ -544,7 +585,11 @@ export function EditableItineraryView({
               {hasChanges ? 'Remember to save your changes before leaving' : 'All changes saved'}
             </p>
           </div>
-          <Button variant="outline" onClick={onBack}>
+          <Button
+            variant="outline"
+            className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md"
+            onClick={onBack}
+          >
             Back to My Itineraries
           </Button>
         </div>

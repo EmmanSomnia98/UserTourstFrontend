@@ -29,7 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/app/components/ui/dialog';
-import { MapPin, Sparkles, BookOpen, Menu, LocateFixed } from 'lucide-react';
+import { MapPin, Sparkles, BookOpen, LocateFixed } from 'lucide-react';
 import backgroundImage from '@/assets/bulusan-lake.jpg';
 
 type AppView =
@@ -525,37 +525,73 @@ export default function App() {
     setLogoutStep('confirm');
   };
 
-  const desktopActionButtonClass = 'h-9 px-3';
-  const mobileActionButtonClass = 'w-full justify-start h-10';
+  const mobileActionButtonClass =
+    'group relative h-11 w-full justify-start overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-800 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-900 hover:shadow-md active:translate-y-0';
   const handleMobileNavigate = (view: AppView) => {
     setCurrentView(view);
     setIsMobileNavOpen(false);
   };
   const renderDrawerActions = () => (
     <>
+      {isAuthenticated && (
+        <div className="rounded-md bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
+          {currentUser?.name || currentUser?.email || 'Signed in'}
+        </div>
+      )}
+      {isMobile && (currentView === 'welcome' || currentView === 'all-destinations') && (
+        <Button
+          variant={locationStatus === 'granted' ? 'secondary' : 'outline'}
+          className={mobileActionButtonClass}
+          onClick={handleAllowLocation}
+          disabled={locationStatus === 'requesting'}
+          title={
+            locationStatus === 'denied'
+              ? 'Location denied. Allow location in browser settings and try again.'
+              : locationStatus === 'unavailable'
+                ? 'Location is not supported by this browser/device.'
+                : undefined
+          }
+        >
+          <LocateFixed className="mr-2 h-4 w-4" />
+          <span>
+            {locationStatus === 'requesting'
+              ? 'Requesting...'
+              : locationStatus === 'granted'
+                ? 'Location On'
+                : 'Allow Location'}
+          </span>
+        </Button>
+      )}
+      {isMobile && (
+        <CollaborationNotifications
+          isAuthenticated={isAuthenticated}
+          onOpenItinerary={handleOpenCollaborativeItinerary}
+          showLabel
+          buttonClassName={mobileActionButtonClass}
+        />
+      )}
+
       {isAuthenticated ? (
         <>
-          <div className="rounded-md bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
-            {currentUser?.name || currentUser?.email || 'Signed in'}
-          </div>
           <Button
             variant="outline"
             className={mobileActionButtonClass}
             onClick={() => handleMobileNavigate('all-destinations')}
           >
-            View All Destination
+            <MapPin className="mr-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+            <span className="transition-transform duration-300 group-hover:translate-x-0.5">View All Destination</span>
           </Button>
           <Button
             variant="outline"
             className={mobileActionButtonClass}
             onClick={() => handleMobileNavigate('saved-itineraries')}
           >
-            <BookOpen className="w-4 h-4 mr-2" />
-            View My Itineraries
+            <BookOpen className="mr-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+            <span className="transition-transform duration-300 group-hover:translate-x-0.5">View My Itineraries</span>
           </Button>
           <Button
             variant="outline"
-            className={mobileActionButtonClass}
+            className={`${mobileActionButtonClass} text-red-600 hover:!border-red-300 hover:!bg-red-50 hover:!text-red-700`}
             onClick={handleLogoutAttempt}
           >
             Log out
@@ -581,7 +617,8 @@ export default function App() {
             className={mobileActionButtonClass}
             onClick={() => handleMobileNavigate('all-destinations')}
           >
-            View All Destination
+            <MapPin className="mr-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+            <span className="transition-transform duration-300 group-hover:translate-x-0.5">View All Destination</span>
           </Button>
         </>
       )}
@@ -600,26 +637,26 @@ export default function App() {
       {/* Header */}
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-          <div className="flex items-start justify-between sm:items-center">
+          <div className="flex items-center justify-between gap-3 sm:gap-4">
             <button
               type="button"
               onClick={handleBackToWelcome}
-              className="flex items-center gap-3 text-left"
+              className="flex min-w-0 items-center gap-3 text-left"
               aria-label="Go to homepage"
             >
-              <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+              <div className="h-10 w-10 shrink-0 rounded-lg bg-blue-500 flex items-center justify-center">
                 <MapPin className="w-6 h-6 text-white" />
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">Bulusan Wanderer</h1>
-                <p className="text-sm text-gray-600">Personalized Itinerary Planner</p>
+              <div className="min-w-0">
+                <h1 className="truncate text-lg font-bold leading-tight text-gray-900 sm:text-2xl">Bulusan Wanderer</h1>
+                <p className="truncate text-xs leading-tight text-gray-600 sm:text-sm">Personalized Itinerary Planner</p>
               </div>
             </button>
-            <div className="flex items-center gap-2">
-              {(currentView === 'welcome' || currentView === 'all-destinations') && (
+            <div className="flex shrink-0 items-center gap-2">
+              {!isMobile && (currentView === 'welcome' || currentView === 'all-destinations') && (
                 <Button
                   variant={locationStatus === 'granted' ? 'secondary' : 'outline'}
-                  className={desktopActionButtonClass}
+                  className="h-9 px-3"
                   onClick={handleAllowLocation}
                   disabled={locationStatus === 'requesting'}
                   title={
@@ -630,8 +667,8 @@ export default function App() {
                         : undefined
                   }
                 >
-                  <LocateFixed className="w-4 h-4 sm:mr-2" />
-                  <span className="text-xs sm:text-sm">
+                  <LocateFixed className="mr-2 h-4 w-4" />
+                  <span className="text-sm">
                     {locationStatus === 'requesting'
                       ? 'Requesting...'
                       : locationStatus === 'granted'
@@ -640,17 +677,33 @@ export default function App() {
                   </span>
                 </Button>
               )}
-              <CollaborationNotifications
-                isAuthenticated={isAuthenticated}
-                onOpenItinerary={handleOpenCollaborativeItinerary}
-              />
+              {!isMobile && (
+                <CollaborationNotifications
+                  isAuthenticated={isAuthenticated}
+                  onOpenItinerary={handleOpenCollaborativeItinerary}
+                />
+              )}
               <Button
                 variant="outline"
-                size="icon"
                 aria-label="Open navigation menu"
+                className={
+                  isMobile
+                    ? 'h-10 w-10 rounded-full border border-slate-300 bg-slate-100 px-0 text-slate-700 shadow-[0_2px_6px_rgba(15,23,42,0.12)] transition-colors hover:bg-slate-50 hover:text-slate-900'
+                    : 'group h-10 w-10 overflow-hidden rounded-full border border-slate-300 bg-slate-100 px-0 text-slate-700 shadow-[0_2px_6px_rgba(15,23,42,0.12)] transition-all duration-300 ease-out hover:w-24 hover:px-3 hover:bg-slate-50 hover:text-slate-900'
+                }
                 onClick={() => setIsMobileNavOpen(true)}
               >
-                <Menu className="w-5 h-5" />
+                <span
+                  aria-hidden="true"
+                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-base leading-none text-slate-700"
+                >
+                  ≡
+                </span>
+                {!isMobile && (
+                  <span className="ml-2 whitespace-nowrap text-xs font-medium opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                    Menu
+                  </span>
+                )}
               </Button>
             </div>
           </div>
@@ -754,15 +807,19 @@ export default function App() {
                   {allDestinations.map((destination, index) => (
                     <div
                       key={destination.id ?? `${destination.name}-${index}`}
-                      className="relative h-56 min-w-[260px] snap-start rounded-lg overflow-hidden shadow-lg md:h-64 md:min-w-[320px]"
+                      className="group relative h-56 min-w-[260px] snap-start overflow-hidden rounded-xl border border-white/50 bg-black shadow-lg transition duration-300 ease-out hover:-translate-y-1 hover:shadow-2xl md:h-64 md:min-w-[320px]"
                     >
                       <img
                         src={destination.image}
                         alt={destination.name}
-                        className="w-full h-full object-cover"
+                        className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-110 group-hover:brightness-90"
                       />
-                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-                        <p className="text-white font-semibold">{destination.name}</p>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent opacity-90 transition duration-300 group-hover:opacity-100" />
+                      <div className="absolute inset-x-0 bottom-0 translate-y-1 p-4 transition duration-300 group-hover:translate-y-0">
+                        <p className="text-base font-semibold text-white drop-shadow-sm">{destination.name}</p>
+                        <p className="mt-1 text-xs tracking-wide text-white/80 opacity-0 transition duration-300 group-hover:opacity-100">
+                          Hover to preview
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -780,30 +837,30 @@ export default function App() {
 
             {/* Features */}
             <div className={isMobile ? "flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1 text-left" : "grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto text-left"}>
-              <div className="min-w-[85%] snap-start bg-white p-6 rounded-lg shadow-md sm:min-w-0">
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-                  <Sparkles className="w-6 h-6 text-blue-600" />
+              <div className="group min-w-[85%] snap-start rounded-lg border border-white/70 bg-white p-6 shadow-md transition-all duration-300 ease-out hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl sm:min-w-0">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 transition-transform duration-300 group-hover:scale-110">
+                  <Sparkles className="h-6 w-6 text-blue-600 transition-transform duration-300 group-hover:rotate-6" />
                 </div>
-                <h3 className="font-semibold text-lg mb-2">AI Recommendation Engine</h3>
-                <p className="text-gray-600 text-sm">
+                <h3 className="mb-2 text-lg font-semibold">AI Recommendation Engine</h3>
+                <p className="text-sm text-gray-600">
                   Our backend AI service scores destinations using your trip preferences and profile signals
                 </p>
               </div>
-              <div className="min-w-[85%] snap-start bg-white p-6 rounded-lg shadow-md sm:min-w-0">
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
-                  <MapPin className="w-6 h-6 text-green-600" />
+              <div className="group min-w-[85%] snap-start rounded-lg border border-white/70 bg-white p-6 shadow-md transition-all duration-300 ease-out hover:-translate-y-1 hover:border-emerald-200 hover:shadow-xl sm:min-w-0">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-green-100 transition-transform duration-300 group-hover:scale-110">
+                  <MapPin className="h-6 w-6 text-green-600 transition-transform duration-300 group-hover:rotate-6" />
                 </div>
-                <h3 className="font-semibold text-lg mb-2">Route and Budget Aware</h3>
-                <p className="text-gray-600 text-sm">
+                <h3 className="mb-2 text-lg font-semibold">Route and Budget Aware</h3>
+                <p className="text-sm text-gray-600">
                   Recommendations are tailored to your available time and spending preferences
                 </p>
               </div>
-              <div className="min-w-[85%] snap-start bg-white p-6 rounded-lg shadow-md sm:min-w-0">
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
-                  <Sparkles className="w-6 h-6 text-purple-600" />
+              <div className="group min-w-[85%] snap-start rounded-lg border border-white/70 bg-white p-6 shadow-md transition-all duration-300 ease-out hover:-translate-y-1 hover:border-violet-200 hover:shadow-xl sm:min-w-0">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-purple-100 transition-transform duration-300 group-hover:scale-110">
+                  <Sparkles className="h-6 w-6 text-purple-600 transition-transform duration-300 group-hover:rotate-6" />
                 </div>
-                <h3 className="font-semibold text-lg mb-2">Smart Itinerary Scheduling</h3>
-                <p className="text-gray-600 text-sm">
+                <h3 className="mb-2 text-lg font-semibold">Smart Itinerary Scheduling</h3>
+                <p className="text-sm text-gray-600">
                   Intelligent scheduling considers difficulty, duration, and optimal daily activity distribution
                 </p>
               </div>
@@ -811,7 +868,7 @@ export default function App() {
 
             <Button 
               size="lg" 
-              className="w-full sm:w-auto text-base sm:text-lg px-6 sm:px-8 py-5 sm:py-6"
+              className="w-full px-6 py-5 text-base transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-xl sm:w-auto sm:px-8 sm:py-6 sm:text-lg"
               onClick={handleStartPlanning}
             >
               Start Planning Your Trip!

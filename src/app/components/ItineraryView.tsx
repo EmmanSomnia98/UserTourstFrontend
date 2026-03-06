@@ -14,11 +14,12 @@ import {
 } from '@/app/components/ui/dialog';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { GeoPoint } from '@/app/utils/travel';
-import { Calendar, Trash2, Download, Share2, Wallet, Star } from 'lucide-react';
+import { Calendar, Trash2, Download, Share2, Wallet, Star, Map } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { createItinerary } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
+import { buildGoogleMapsRouteUrl, getDaySegmentDistances } from '@/app/utils/google-maps';
 
 interface ItineraryViewProps {
   destinations: Destination[];
@@ -255,7 +256,7 @@ export function ItineraryView({
   return (
     <div className="space-y-6">
       {/* Summary Card */}
-      <Card className="p-6">
+      <Card className="p-6 transition-all duration-300 ease-out hover:shadow-lg">
         <div className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -263,11 +264,16 @@ export function ItineraryView({
               <p className="text-gray-600 mt-1">{destinations.length} destinations planned</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={handleDownload}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md"
+                onClick={handleDownload}
+              >
                 <Download className="w-4 h-4 mr-2" />
                 Download
               </Button>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md">
                 <Share2 className="w-4 h-4 mr-2" />
                 Share
               </Button>
@@ -300,16 +306,47 @@ export function ItineraryView({
 
       {/* Day by Day Schedule */}
       {Array.from(schedule.entries()).map(([day, dayDestinations]) => (
-        <Card key={day} className="p-6">
+        <Card key={day} className="p-6 transition-all duration-300 ease-out hover:shadow-lg">
+          {(() => {
+            const dayRouteUrl = buildGoogleMapsRouteUrl(dayDestinations, { origin: userLocation });
+            const daySegments = getDaySegmentDistances(dayDestinations);
+            return (
           <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center font-semibold">
-                {day}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center font-semibold">
+                  {day}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">Day {day}</h3>
+                </div>
               </div>
-              <div>
-                <h3 className="font-semibold text-lg">Day {day}</h3>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!dayRouteUrl}
+                className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                onClick={() => {
+                  if (!dayRouteUrl) return;
+                  window.open(dayRouteUrl, '_blank', 'noopener,noreferrer');
+                }}
+              >
+                <Map className="mr-2 h-4 w-4" />
+                View Day on Map
+              </Button>
             </div>
+            {daySegments.length > 0 && (
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Between destinations</p>
+                <div className="mt-1 space-y-1">
+                  {daySegments.map((segment, segmentIndex) => (
+                    <p key={`${day}-${segment.fromName}-${segment.toName}-${segmentIndex}`} className="text-xs text-slate-700">
+                      {segment.fromName} → {segment.toName}: <span className="font-medium">{segment.distanceLabel}</span>
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3 sm:ml-6 sm:pl-6">
               {dayDestinations.length === 0 && (
@@ -339,7 +376,7 @@ export function ItineraryView({
                   })()}
                   
                   <Card
-                    className={`p-4 cursor-pointer hover:shadow-md transition-shadow ${
+                    className={`group p-4 cursor-pointer transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md ${
                       finishedDestinationKeys.has(getEntryKey(dest, day, index)) ? 'border-emerald-200 bg-emerald-50/30' : ''
                     }`}
                     role="button"
@@ -357,7 +394,7 @@ export function ItineraryView({
                         <img
                           src={dest.image}
                           alt={dest.name}
-                          className="w-full h-32 sm:w-24 sm:h-24 object-cover rounded-lg flex-shrink-0"
+                          className="w-full h-32 sm:w-24 sm:h-24 object-cover rounded-lg flex-shrink-0 transition-transform duration-300 group-hover:scale-105"
                         />
                         <div className="flex-1 space-y-2">
                           <div>
@@ -414,7 +451,7 @@ export function ItineraryView({
                             event.stopPropagation();
                             toggleFinished(getEntryKey(dest, day, index));
                           }}
-                          className="flex-shrink-0"
+                          className="flex-shrink-0 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm"
                         >
                           {finishedDestinationKeys.has(getEntryKey(dest, day, index)) ? 'Finished' : 'Finish'}
                         </Button>
@@ -425,7 +462,7 @@ export function ItineraryView({
                             event.stopPropagation();
                             handleRemoveClick(dest.id, getEntryKey(dest, day, index));
                           }}
-                          className="flex-shrink-0"
+                          className="flex-shrink-0 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:bg-red-50"
                         >
                           <Trash2 className="w-4 h-4 text-red-500" />
                         </Button>
@@ -436,11 +473,13 @@ export function ItineraryView({
               ))}
             </div>
           </div>
+            );
+          })()}
         </Card>
       ))}
 
       {/* Actions */}
-      <Card className="p-6">
+      <Card className="p-6 transition-all duration-300 ease-out hover:shadow-lg">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h4 className="font-semibold">Ready to explore Bulusan?</h4>
@@ -450,7 +489,11 @@ export function ItineraryView({
           </div>
           <div className="flex flex-wrap gap-2">
             {onViewSavedItineraries && (
-              <Button variant="outline" onClick={onViewSavedItineraries}>
+              <Button
+                variant="outline"
+                className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md"
+                onClick={onViewSavedItineraries}
+              >
                 View My Itineraries
               </Button>
             )}
@@ -458,11 +501,15 @@ export function ItineraryView({
               variant="outline"
               onClick={openSaveDialog}
               disabled={isSaving}
-              className={isSaving ? 'cursor-not-allowed' : ''}
+              className={`transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md ${isSaving ? 'cursor-not-allowed' : ''}`}
             >
               {isSaving ? 'Saving...' : 'Save Itinerary'}
             </Button>
-            <Button variant="outline" onClick={onReset}>
+            <Button
+              variant="outline"
+              className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md"
+              onClick={onReset}
+            >
               Start New Itinerary
             </Button>
           </div>

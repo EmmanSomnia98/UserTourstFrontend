@@ -11,6 +11,8 @@ import {
 type CollaborationNotificationsProps = {
   isAuthenticated: boolean;
   onOpenItinerary?: (itineraryId: string) => void;
+  buttonClassName?: string;
+  showLabel?: boolean;
 };
 
 function formatRelative(value: string): string {
@@ -28,6 +30,8 @@ function formatRelative(value: string): string {
 export function CollaborationNotifications({
   isAuthenticated,
   onOpenItinerary,
+  buttonClassName,
+  showLabel = false,
 }: CollaborationNotificationsProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [items, setItems] = useState<CollaborationNotification[]>([]);
@@ -149,18 +153,32 @@ export function CollaborationNotifications({
 
   if (!isAuthenticated) return null;
 
+  const panelClassName = showLabel
+    ? 'absolute left-0 z-40 mt-2 w-full rounded-lg border border-slate-200 bg-white p-3 shadow-xl'
+    : 'absolute right-0 z-40 mt-2 w-[22rem] rounded-lg border border-slate-200 bg-white p-3 shadow-xl';
+  const badgeClassName = showLabel
+    ? 'absolute right-2 top-1/2 inline-flex h-5 min-w-5 -translate-y-1/2 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white'
+    : 'absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white';
+
   return (
-    <div className="relative">
-      <Button variant="outline" size="icon" aria-label="Open collaboration notifications" onClick={() => setIsOpen((prev) => !prev)}>
+    <div className={`relative ${showLabel ? 'w-full' : ''}`}>
+      <Button
+        variant="outline"
+        size={showLabel ? undefined : 'icon'}
+        className={showLabel ? buttonClassName : undefined}
+        aria-label="Open collaboration notifications"
+        onClick={() => setIsOpen((prev) => !prev)}
+      >
         <Bell className="h-4 w-4" />
+        {showLabel && <span className="ml-2">Notifications</span>}
       </Button>
       {unreadCount > 0 && (
-        <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
+        <span className={badgeClassName}>
           {unreadCount > 99 ? '99+' : unreadCount}
         </span>
       )}
       {isOpen && (
-        <div className="absolute right-0 z-40 mt-2 w-[22rem] rounded-lg border border-slate-200 bg-white p-3 shadow-xl">
+        <div className={panelClassName}>
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-900">Collaboration</h3>
             <Button variant="ghost" size="sm" onClick={() => setIsOpen(false)}>
