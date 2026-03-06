@@ -81,7 +81,8 @@ export function TravelModeBadges({ destination, origin }: TravelModeBadgesProps)
   const fallback = useMemo(
     () => ({
       walk: estimateMinutes(distanceKmFallback, 5),
-      bike: estimateMinutes(distanceKmFallback, 15),
+      // Use a realistic fallback speed for two-wheelers on local roads.
+      bike: estimateMinutes(distanceKmFallback, 40),
       drive: estimateMinutes(distanceKmFallback, 30),
     }),
     [distanceKmFallback]
@@ -178,7 +179,8 @@ export function TravelModeBadges({ destination, origin }: TravelModeBadgesProps)
           loading: false,
           estimate: {
             distanceKm,
-            durationMin: estimateMinutes(distanceKm, 15),
+            // Keep two-wheeler aligned with routed ETA source instead of slow fixed cycling math.
+            durationMin: state.estimate.durationMin,
           },
         });
         return;

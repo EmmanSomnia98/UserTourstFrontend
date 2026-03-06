@@ -7,6 +7,18 @@ const UNRANKED_SCHEDULE_OFFSET = 10;
 
 const normalizeInterest = (value: string): string => value.trim().toLowerCase();
 
+function getNormalizedInterests(primary?: string[], fallback?: string[]): string[] {
+  const source = Array.isArray(primary) && primary.length > 0
+    ? primary
+    : Array.isArray(fallback)
+      ? fallback
+      : [];
+  return source
+    .filter((value): value is string => typeof value === 'string')
+    .map(normalizeInterest)
+    .filter(Boolean);
+}
+
 function isValidCoordinate(value: number, min: number, max: number): boolean {
   return Number.isFinite(value) && value >= min && value <= max;
 }
@@ -61,16 +73,8 @@ function calculateInterestMatchBreakdown(destination: Destination, preferences: 
   weightedMatchUnits: number;
   bestRank: number | null;
 } {
-  const destinationInterests = (
-    destination.subInterests && destination.subInterests.length > 0 ? destination.subInterests : destination.interests
-  )
-    .map(normalizeInterest)
-    .filter(Boolean);
-  const userInterests = (
-    preferences.subInterests && preferences.subInterests.length > 0 ? preferences.subInterests : preferences.interests
-  )
-    .map(normalizeInterest)
-    .filter(Boolean);
+  const destinationInterests = getNormalizedInterests(destination.subInterests, destination.interests);
+  const userInterests = getNormalizedInterests(preferences.subInterests, preferences.interests);
   const rankMap = buildNormalizedRankMap(preferences.interestRanks);
 
   let matchCount = 0;
@@ -231,7 +235,9 @@ export function calculateItinerarySchedule(
     schedule.set(day, []);
   }
 
-  const normalizedUserInterests = userInterests.map(normalizeInterest).filter(Boolean);
+  const normalizedUserInterests = (Array.isArray(userInterests) ? userInterests : [])
+    .map(normalizeInterest)
+    .filter(Boolean);
   const normalizedRankMap = buildNormalizedRankMap(interestRanks);
   const hasExplicitRanks = normalizedRankMap.size > 0;
   const interestPriority = new Map<string, number>();
@@ -248,11 +254,7 @@ export function calculateItinerarySchedule(
 
   const rankedDestinations = [...selectedDestinations]
     .map((destination, originalIndex) => {
-      const destinationInterests = (
-        destination.subInterests && destination.subInterests.length > 0 ? destination.subInterests : destination.interests
-      )
-        .map(normalizeInterest)
-        .filter(Boolean);
+      const destinationInterests = getNormalizedInterests(destination.subInterests, destination.interests);
       let matchCount = 0;
       let bestPriority = Number.POSITIVE_INFINITY;
 
