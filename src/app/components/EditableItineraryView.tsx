@@ -7,6 +7,7 @@ import { Badge } from '@/app/components/ui/badge';
 import { Separator } from '@/app/components/ui/separator';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
+import { DestinationLocationPanel } from '@/app/components/DestinationLocationPanel';
 import { Calendar, Clock, Trash2, Plus, Save, X, Edit2, Wallet, Star, Map as MapIcon } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { createItinerary, deleteRemoteItinerary } from '@/app/api/itineraries';
@@ -515,6 +516,7 @@ export function EditableItineraryView({
                               </div>
                             </div>
                           <TravelModeBadges destination={dest} origin={userLocation} />
+                          <DestinationLocationPanel destination={dest} />
                           {onRateDestination && (
                             <div className="space-y-1">
                               <p className="text-xs font-medium text-slate-600">Your rating</p>
@@ -667,6 +669,7 @@ export function EditableItineraryView({
                   </span>
                 </div>
                 <TravelModeBadges destination={selectedDestination} origin={userLocation} />
+                <DestinationLocationPanel destination={selectedDestination} />
               </div>
             </>
           )}

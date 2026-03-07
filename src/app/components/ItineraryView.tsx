@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from '@/app/components/ui/dialog';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
+import { DestinationLocationPanel } from '@/app/components/DestinationLocationPanel';
 import { GeoPoint } from '@/app/utils/travel';
 import { Calendar, Trash2, Download, Share2, Wallet, Star, Map } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
@@ -437,6 +438,7 @@ export function ItineraryView({
                           <div className="pt-1">
                             <TravelModeBadges destination={dest} origin={userLocation} />
                           </div>
+                          <DestinationLocationPanel destination={dest} />
                           {onRateDestination && (
                             <div className="space-y-1">
                               <p className="text-xs font-medium text-slate-600">Your rating</p>
@@ -639,6 +641,7 @@ export function ItineraryView({
                   </span>
                 </div>
                 <TravelModeBadges destination={selectedDestination} origin={userLocation} />
+                <DestinationLocationPanel destination={selectedDestination} />
               </div>
             </>
           )}
