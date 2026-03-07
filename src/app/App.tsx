@@ -244,12 +244,29 @@ export default function App() {
       const hasBudgetConstraint = Number.isFinite(prefs.budget) && prefs.budget > 0;
       if (hasBudgetConstraint) {
         throw new Error(
-          `No destinations fit your budget of ₱${Math.round(prefs.budget)} per day for ${prefs.duration} day(s). ` +
+          `No destinations fit your total budget of ₱${Math.round(prefs.budget)} for ${prefs.duration} day(s). ` +
           'Try increasing your budget or changing your interests.'
         );
       }
       throw new Error('No destinations matched your current preferences. Try selecting different interests.');
     }
+
+    const hasBudgetConstraint = Number.isFinite(prefs.budget) && prefs.budget > 0;
+    const itineraryTotalCost = serverResult.destinations.reduce(
+      (sum, destination) => sum + Number(destination.estimatedCost || 0),
+      0
+    );
+    const selectedCost =
+      serverResult.metadata.budget?.totalSelectedCost ?? itineraryTotalCost;
+    if (hasBudgetConstraint && Number.isFinite(selectedCost) && selectedCost > prefs.budget) {
+      const overBy = Math.max(0, selectedCost - prefs.budget);
+      throw new Error(
+        `Your total budget of ₱${Math.round(prefs.budget)} is not enough for ${prefs.duration} day(s). ` +
+        `Current itinerary estimate is ₱${Math.round(selectedCost)} (over by ₱${Math.round(overBy)}). ` +
+        'Please increase your budget or reduce your trip days.'
+      );
+    }
+
     setLastRecommendationRequestId(serverResult.metadata.recommendationRequestId ?? null);
     setLastRecommendationModelVersion(serverResult.metadata.modelVersion ?? null);
     setLastRecommendationAlgorithm(serverResult.metadata.algorithmUsed ?? null);

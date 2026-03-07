@@ -161,7 +161,7 @@ export async function fetchServerRecommendations(
     timePreference: preferences.timePreference ?? 'whole_day',
     matchMode: 'strict' as const,
   };
-  const maxBudget = Math.max(1, Math.round(preferences.budget * Math.max(1, preferences.duration)));
+  const maxBudget = Math.max(1, Math.round(preferences.budget));
   const days = Math.max(1, Math.floor(preferences.duration));
   const hasBudget = Number.isFinite(preferences.budget) && preferences.budget > 0;
   const constrainedBody = {

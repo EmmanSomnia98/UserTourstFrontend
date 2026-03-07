@@ -138,15 +138,26 @@ function toDestinationList(items: BackendItineraryDestination[] | undefined): De
       normalizeText(candidate.path)
     );
   };
-  const fromArray = (value: unknown): string => {
-    if (!Array.isArray(value) || value.length === 0) return '';
-    for (const entry of value) {
+  const fromArray = (value: unknown): string[] => {
+    if (!Array.isArray(value) || value.length === 0) return [];
+    const images: string[] = [];
+    const seen = new Set<string>();
+    const append = (entry: unknown) => {
       const asText = normalizeText(entry);
-      if (asText) return asText;
+      if (asText && !seen.has(asText)) {
+        seen.add(asText);
+        images.push(asText);
+      }
       const asObject = objectWithUrl(entry);
-      if (asObject) return asObject;
+      if (asObject && !seen.has(asObject)) {
+        seen.add(asObject);
+        images.push(asObject);
+      }
+    };
+    for (const entry of value) {
+      append(entry);
     }
-    return '';
+    return images;
   };
 
   return items
@@ -164,28 +175,37 @@ function toDestinationList(items: BackendItineraryDestination[] | undefined): De
         (typeof destinationRaw === 'string' || typeof destinationRaw === 'number' ? destinationRaw : null)
       );
       if (!normalizedId) return null;
-      const getImage = (): string => {
-        return (
-          normalizeText(destination?.image) ||
-          normalizeText(destination?.imageUrl) ||
-          normalizeText(destination?.image_url) ||
-          normalizeText(destination?.thumbnail) ||
-          normalizeText(destination?.photo) ||
-          fromArray(destination?.images) ||
-          fromArray(destination?.photos)
-        );
+      const getImages = (): string[] => {
+        const images: string[] = [];
+        const seen = new Set<string>();
+        const append = (value: unknown) => {
+          const normalized = normalizeText(value);
+          if (!normalized || seen.has(normalized)) return;
+          seen.add(normalized);
+          images.push(normalized);
+        };
+        append(destination?.image);
+        append(destination?.imageUrl);
+        append(destination?.image_url);
+        append(destination?.thumbnail);
+        append(destination?.photo);
+        fromArray(destination?.images).forEach(append);
+        fromArray(destination?.photos).forEach(append);
+        return images;
       };
       const estimatedCost = toNumber(destination?.estimatedCost) ?? toNumber(item.cost) ?? 0;
       const location = normalizeLocation(destination as BackendItineraryDestination['destination']);
       const address = normalizeAddress(destination as BackendItineraryDestination['destination']);
       const duration = normalizeDuration(destination as BackendItineraryDestination['destination']);
 
+      const normalizedImages = getImages().map((value) => resolveAssetUrl(value)).filter(Boolean);
       return {
         ...(destination as Destination),
         id: normalizedId,
         name: normalizeText(destination?.name) || 'Unknown destination',
         description: normalizeText(destination?.description),
-        image: resolveAssetUrl(getImage()),
+        image: normalizedImages[0] ?? '',
+        images: normalizedImages,
         type: normalizeDestinationType(destination?.type),
         difficulty: normalizeDifficulty(destination?.difficulty),
         duration,

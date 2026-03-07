@@ -143,7 +143,16 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
     return DIFFICULTY_FALLBACK;
   };
 
-  const pickImageValue = (item: RawDestination): string => {
+  const pickImageValues = (item: RawDestination): string[] => {
+    const images: string[] = [];
+    const seen = new Set<string>();
+    const append = (value: unknown) => {
+      const normalized = normalizeText(value);
+      if (!normalized) return;
+      if (seen.has(normalized)) return;
+      seen.add(normalized);
+      images.push(normalized);
+    };
     const objectWithUrl = (value: unknown): string => {
       if (!value || typeof value !== 'object') return '';
       const candidate = value as { url?: unknown; secure_url?: unknown; path?: unknown };
@@ -154,26 +163,24 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
       );
     };
 
-    const fromArray = (value: unknown): string => {
-      if (!Array.isArray(value) || value.length === 0) return '';
+    const fromArray = (value: unknown) => {
+      if (!Array.isArray(value) || value.length === 0) return;
       for (const entry of value) {
-        const asText = normalizeText(entry);
-        if (asText) return asText;
+        append(entry);
         const asObject = objectWithUrl(entry);
-        if (asObject) return asObject;
+        append(asObject);
       }
-      return '';
     };
 
-    return (
-      normalizeText(item.image) ||
-      normalizeText(item.imageUrl) ||
-      normalizeText(item.image_url) ||
-      normalizeText(item.thumbnail) ||
-      normalizeText(item.photo) ||
-      fromArray(item.images) ||
-      fromArray(item.photos)
-    );
+    append(item.image);
+    append(item.imageUrl);
+    append(item.image_url);
+    append(item.thumbnail);
+    append(item.photo);
+    fromArray(item.images);
+    fromArray(item.photos);
+
+    return images;
   };
 
   const extractSubInterestsFromFeatures = (value: unknown): string[] => {
@@ -228,6 +235,8 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
     const subInterests = Array.from(new Set([...explicitSubInterests, ...derivedSubInterests]));
     const bestTimeToVisit = normalizeStringArray(item.bestTimeToVisit ?? item.best_time_to_visit);
 
+    const imageCandidates = pickImageValues(item).map((value) => resolveAssetUrl(value)).filter(Boolean);
+
     return {
       id: String(item.id ?? item._id ?? item.destinationId ?? fallbackId),
       name,
@@ -244,7 +253,8 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
       estimatedCost: Math.max(0, estimatedCost),
       location: normalizeLocation(item),
       address: normalizeAddress(item),
-      image: resolveAssetUrl(pickImageValue(item)),
+      image: imageCandidates[0] ?? '',
+      images: imageCandidates,
     } as Destination;
   });
 }

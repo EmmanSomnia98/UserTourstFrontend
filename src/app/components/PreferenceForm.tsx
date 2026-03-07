@@ -594,7 +594,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
         {/* Budget Input */}
         {planningMode === 'budget' && (
           <div className="space-y-4">
-            <Label htmlFor="budget" className="text-lg">Budget per Activity (₱)</Label>
+            <Label htmlFor="budget" className="text-lg">Total Trip Budget (₱)</Label>
             <div className="space-y-2">
               <Input
                 id="budget"
@@ -603,11 +603,11 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
                 step="100"
                 value={budget}
                 onChange={(e) => setBudget(e.target.value)}
-                placeholder="Enter your budget per activity"
+                placeholder="Enter your total budget"
                 className="text-lg transition-colors hover:border-slate-400 focus-visible:ring-blue-200"
               />
               <p className="text-sm text-gray-600">
-                Set your maximum budget per activity. Activities within this range will be prioritized.
+                Set your maximum total budget for the whole trip duration.
               </p>
             </div>
           </div>

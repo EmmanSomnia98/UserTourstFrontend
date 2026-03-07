@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Destination } from '@/app/types/destination';
 import { DestinationCard } from '@/app/components/DestinationCard';
+import { DestinationImageGallery } from '@/app/components/DestinationImageGallery';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import { Input } from '@/app/components/ui/input';
@@ -211,11 +212,7 @@ export function AllDestinationsView({
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
-                <img
-                  src={selectedDestination.image}
-                  alt={selectedDestination.name}
-                  className="w-full h-56 sm:h-72 object-cover rounded-lg"
-                />
+                <DestinationImageGallery destination={selectedDestination} />
                 <div className="max-h-56 space-y-2 overflow-y-auto pr-1 text-sm text-slate-700">
                   {formatDescriptionLines(selectedDestination.description).map((line, index) => (
                     <p key={`${selectedDestination.id}-desc-${index}`} className="leading-relaxed">

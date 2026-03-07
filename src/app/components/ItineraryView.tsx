@@ -14,6 +14,7 @@ import {
 } from '@/app/components/ui/dialog';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { DestinationLocationPanel } from '@/app/components/DestinationLocationPanel';
+import { DestinationImageGallery } from '@/app/components/DestinationImageGallery';
 import { GeoPoint } from '@/app/utils/travel';
 import { Calendar, Trash2, Download, Share2, Wallet, Star, Map } from 'lucide-react';
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
@@ -622,11 +623,7 @@ export function ItineraryView({
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
-                <img
-                  src={selectedDestination.image}
-                  alt={selectedDestination.name}
-                  className="w-full h-56 sm:h-72 object-cover rounded-lg"
-                />
+                <DestinationImageGallery destination={selectedDestination} />
                 <div className="max-h-56 space-y-2 overflow-y-auto pr-1 text-sm text-gray-700">
                   {formatDescriptionLines(selectedDestination.description).map((line, index) => (
                     <p key={`${selectedDestination.id}-desc-${index}`} className="leading-relaxed">

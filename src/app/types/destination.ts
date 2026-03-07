@@ -3,6 +3,7 @@ export interface Destination {
   name: string;
   description: string;
   image: string;
+  images?: string[];
   type: 'nature' | 'adventure' | 'cultural' | 'relaxation' | 'historical';
   difficulty: 'easy' | 'moderate' | 'challenging';
   duration: number; // in hours
