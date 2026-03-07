@@ -35,6 +35,14 @@ type RecommendationsPayload =
       recommendationId?: string;
       modelVersion?: string;
       algorithmVersion?: string;
+      algorithmUsed?: string;
+      budget?: {
+        mode?: string;
+        maxBudget?: number | string;
+        totalSelectedCost?: number | string;
+        remainingBudget?: number | string;
+        utilizationPct?: number | string;
+      };
     };
 
 function isAuthFailure(error: unknown): boolean {
@@ -55,7 +63,17 @@ export type ServerRecommendationsResult = {
   metadata: {
     recommendationRequestId?: string;
     modelVersion?: string;
+    algorithmUsed?: string;
+    budget?: RecommendationBudgetSummary;
   };
+};
+
+export type RecommendationBudgetSummary = {
+  mode?: string;
+  maxBudget?: number;
+  totalSelectedCost?: number;
+  remainingBudget?: number;
+  utilizationPct?: number;
 };
 
 function getDestinationId(ref: unknown): string | null {
@@ -108,6 +126,22 @@ function extractScore(item: RecommendationItem): number | null {
   if ('hybridScore' in item) return toNumber(item.hybridScore);
   if ('recommendationScore' in item) return toNumber(item.recommendationScore);
   return null;
+}
+
+function extractBudgetSummary(payload: RecommendationsPayload): RecommendationBudgetSummary | undefined {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return undefined;
+  if (!('budget' in payload) || !payload.budget || typeof payload.budget !== 'object') return undefined;
+
+  const budget = payload.budget;
+  const summary: RecommendationBudgetSummary = {
+    mode: typeof budget.mode === 'string' ? budget.mode : undefined,
+    maxBudget: toNumber(budget.maxBudget) ?? undefined,
+    totalSelectedCost: toNumber(budget.totalSelectedCost) ?? undefined,
+    remainingBudget: toNumber(budget.remainingBudget) ?? undefined,
+    utilizationPct: toNumber(budget.utilizationPct) ?? undefined,
+  };
+
+  return Object.values(summary).some((value) => value !== undefined) ? summary : undefined;
 }
 
 export async function fetchServerRecommendations(
@@ -242,6 +276,10 @@ export async function fetchServerRecommendations(
             ('algorithmVersion' in payload && typeof payload.algorithmVersion === 'string'
               ? payload.algorithmVersion
               : undefined),
+          algorithmUsed: ('algorithmUsed' in payload && typeof payload.algorithmUsed === 'string')
+            ? payload.algorithmUsed
+            : undefined,
+          budget: extractBudgetSummary(payload),
         }
       : {};
 

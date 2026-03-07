@@ -21,12 +21,35 @@ type BackendItineraryDestination = {
     latitude?: number | string;
     longitude?: number | string;
     coordinates?: [number, number];
+    purok?: string;
+    barangay?: string;
+    city?: string;
+    municipality?: string;
+    province?: string;
+    fullAddress?: string;
+    full_address?: string;
+    address?: string | {
+      purok?: string;
+      barangay?: string;
+      city?: string;
+      municipality?: string;
+      province?: string;
+      fullAddress?: string;
+      full_address?: string;
+    };
     location?: {
       lat?: number | string;
       lng?: number | string;
       latitude?: number | string;
       longitude?: number | string;
       coordinates?: [number, number];
+      purok?: string;
+      barangay?: string;
+      city?: string;
+      municipality?: string;
+      province?: string;
+      fullAddress?: string;
+      full_address?: string;
     };
     imageUrl?: string;
     image_url?: string;
@@ -154,6 +177,7 @@ function toDestinationList(items: BackendItineraryDestination[] | undefined): De
       };
       const estimatedCost = toNumber(destination?.estimatedCost) ?? toNumber(item.cost) ?? 0;
       const location = normalizeLocation(destination as BackendItineraryDestination['destination']);
+      const address = normalizeAddress(destination as BackendItineraryDestination['destination']);
       const duration = normalizeDuration(destination as BackendItineraryDestination['destination']);
 
       return {
@@ -173,6 +197,7 @@ function toDestinationList(items: BackendItineraryDestination[] | undefined): De
         bestTimeToVisit: normalizeStringArray(destination?.bestTimeToVisit),
         estimatedCost,
         location,
+        address,
       } as Destination;
     })
     .filter((dest): dest is Destination => Boolean(dest));
@@ -206,6 +231,50 @@ function normalizeLocation(destination: BackendItineraryDestination['destination
   }
 
   return { lat: Number.NaN, lng: Number.NaN };
+}
+
+function normalizeAddress(
+  destination: BackendItineraryDestination['destination']
+): Destination['address'] {
+  const normalizeText = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+  const addressObject =
+    destination?.address && typeof destination.address === 'object' && !Array.isArray(destination.address)
+      ? destination.address
+      : null;
+  const cityValue =
+    normalizeText(destination?.city) ||
+    normalizeText(destination?.municipality) ||
+    normalizeText(destination?.location?.city) ||
+    normalizeText(destination?.location?.municipality) ||
+    normalizeText(addressObject?.city) ||
+    normalizeText(addressObject?.municipality);
+
+  const normalized: NonNullable<Destination['address']> = {
+    purok:
+      normalizeText(destination?.purok) ||
+      normalizeText(destination?.location?.purok) ||
+      normalizeText(addressObject?.purok),
+    barangay:
+      normalizeText(destination?.barangay) ||
+      normalizeText(destination?.location?.barangay) ||
+      normalizeText(addressObject?.barangay),
+    city: cityValue,
+    province:
+      normalizeText(destination?.province) ||
+      normalizeText(destination?.location?.province) ||
+      normalizeText(addressObject?.province),
+    fullAddress:
+      normalizeText(destination?.fullAddress) ||
+      normalizeText(destination?.full_address) ||
+      normalizeText(destination?.location?.fullAddress) ||
+      normalizeText(destination?.location?.full_address) ||
+      normalizeText(addressObject?.fullAddress) ||
+      normalizeText(addressObject?.full_address) ||
+      normalizeText(typeof destination?.address === 'string' ? destination.address : ''),
+  };
+
+  const hasAnyAddressPart = Object.values(normalized).some(Boolean);
+  return hasAnyAddressPart ? normalized : undefined;
 }
 
 function parseNumberish(value: unknown): number | null {

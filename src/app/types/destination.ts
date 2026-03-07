@@ -17,6 +17,13 @@ export interface Destination {
     lat: number;
     lng: number;
   };
+  address?: {
+    purok?: string;
+    barangay?: string;
+    city?: string;
+    province?: string;
+    fullAddress?: string;
+  };
 }
 
 export interface UserPreferences {

@@ -57,12 +57,35 @@ type RawDestination = Partial<Destination> & {
   latitude?: number | string;
   longitude?: number | string;
   coordinates?: [number, number];
+  purok?: string;
+  barangay?: string;
+  city?: string;
+  municipality?: string;
+  province?: string;
+  fullAddress?: string;
+  full_address?: string;
+  address?: string | {
+    purok?: string;
+    barangay?: string;
+    city?: string;
+    municipality?: string;
+    province?: string;
+    fullAddress?: string;
+    full_address?: string;
+  };
   location?: {
     lat?: number | string;
     lng?: number | string;
     latitude?: number | string;
     longitude?: number | string;
     coordinates?: [number, number];
+    purok?: string;
+    barangay?: string;
+    city?: string;
+    municipality?: string;
+    province?: string;
+    fullAddress?: string;
+    full_address?: string;
   };
   imageUrl?: string;
   image_url?: string;
@@ -220,9 +243,52 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
       bestTimeToVisit,
       estimatedCost: Math.max(0, estimatedCost),
       location: normalizeLocation(item),
+      address: normalizeAddress(item),
       image: resolveAssetUrl(pickImageValue(item)),
     } as Destination;
   });
+}
+
+function normalizeAddress(item: RawDestination): Destination['address'] {
+  const normalizeText = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+  const addressObject =
+    item.address && typeof item.address === 'object' && !Array.isArray(item.address)
+      ? item.address
+      : null;
+  const cityValue =
+    normalizeText(item.city) ||
+    normalizeText(item.municipality) ||
+    normalizeText(item.location?.city) ||
+    normalizeText(item.location?.municipality) ||
+    normalizeText(addressObject?.city) ||
+    normalizeText(addressObject?.municipality);
+
+  const normalized: NonNullable<Destination['address']> = {
+    purok:
+      normalizeText(item.purok) ||
+      normalizeText(item.location?.purok) ||
+      normalizeText(addressObject?.purok),
+    barangay:
+      normalizeText(item.barangay) ||
+      normalizeText(item.location?.barangay) ||
+      normalizeText(addressObject?.barangay),
+    city: cityValue,
+    province:
+      normalizeText(item.province) ||
+      normalizeText(item.location?.province) ||
+      normalizeText(addressObject?.province),
+    fullAddress:
+      normalizeText(item.fullAddress) ||
+      normalizeText(item.full_address) ||
+      normalizeText(item.location?.fullAddress) ||
+      normalizeText(item.location?.full_address) ||
+      normalizeText(addressObject?.fullAddress) ||
+      normalizeText(addressObject?.full_address) ||
+      normalizeText(typeof item.address === 'string' ? item.address : ''),
+  };
+
+  const hasAnyAddressPart = Object.values(normalized).some(Boolean);
+  return hasAnyAddressPart ? normalized : undefined;
 }
 
 function toNumber(value: unknown): number | null {

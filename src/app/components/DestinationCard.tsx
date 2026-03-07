@@ -1,6 +1,5 @@
 import { Destination } from '@/app/types/destination';
 import { Card } from '@/app/components/ui/card';
-import { Badge } from '@/app/components/ui/badge';
 import { Button } from '@/app/components/ui/button';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { formatPeso } from '@/app/utils/currency';
@@ -30,20 +29,28 @@ export function DestinationCard({
   userRating = 0,
   userLocation
 }: DestinationCardProps) {
-  const difficultyColors = {
-    easy: 'bg-green-100 text-green-800',
-    moderate: 'bg-yellow-100 text-yellow-800',
-    challenging: 'bg-red-100 text-red-800'
-  };
+  const hasExactLocation =
+    Number.isFinite(destination.location?.lat) &&
+    Number.isFinite(destination.location?.lng) &&
+    destination.location.lat >= -90 &&
+    destination.location.lat <= 90 &&
+    destination.location.lng >= -180 &&
+    destination.location.lng <= 180;
+  const hasAddress =
+    Boolean(destination.address?.fullAddress) ||
+    Boolean(destination.address?.purok) ||
+    Boolean(destination.address?.barangay) ||
+    Boolean(destination.address?.city) ||
+    Boolean(destination.address?.province);
 
-  const typeColors = {
-    nature: 'bg-emerald-100 text-emerald-800',
-    adventure: 'bg-orange-100 text-orange-800',
-    cultural: 'bg-purple-100 text-purple-800',
-    relaxation: 'bg-blue-100 text-blue-800',
-    historical: 'bg-amber-100 text-amber-800'
-  };
-
+  const exactLocationLabel = hasExactLocation
+    ? `${destination.location.lat.toFixed(6)}, ${destination.location.lng.toFixed(6)}`
+    : null;
+  const exactLocationMapUrl = hasExactLocation
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        `${destination.location.lat},${destination.location.lng}`
+      )}`
+    : null;
   return (
     <Card className="h-full overflow-hidden transition-shadow hover:shadow-lg flex flex-col">
       <div className="relative h-40 sm:h-48 overflow-hidden">
@@ -72,11 +79,6 @@ export function DestinationCard({
           </div>
           
           <p className="text-sm text-gray-600 line-clamp-2">{destination.description}</p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Badge className={typeColors[destination.type]}>{destination.type}</Badge>
-          <Badge className={difficultyColors[destination.difficulty]}>{destination.difficulty}</Badge>
         </div>
 
         <div className="flex items-center justify-between text-sm text-gray-600">
@@ -132,11 +134,46 @@ export function DestinationCard({
           )}
         </div>
 
+        {(hasAddress || hasExactLocation) && (
+          <div className="mt-auto rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+            <p className="text-xs font-medium text-slate-700">Location</p>
+            {destination.address?.fullAddress && (
+              <p className="text-xs text-slate-600">{destination.address.fullAddress}</p>
+            )}
+            <p className="text-xs text-slate-600">
+              Purok: {destination.address?.purok || 'Not provided'}
+            </p>
+            <p className="text-xs text-slate-600">
+              Barangay: {destination.address?.barangay || 'Not provided'}
+            </p>
+            <p className="text-xs text-slate-600">
+              City: {destination.address?.city || 'Not provided'}
+            </p>
+            <p className="text-xs text-slate-600">
+              Province: {destination.address?.province || 'Not provided'}
+            </p>
+            {hasExactLocation && (
+              <p className="text-[11px] text-slate-500">{exactLocationLabel}</p>
+            )}
+            {hasExactLocation && (
+              <a
+                href={exactLocationMapUrl ?? '#'}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:underline"
+              >
+                <MapPin className="h-3.5 w-3.5" />
+                View on Google Maps
+              </a>
+            )}
+          </div>
+        )}
+
         {onAddToItinerary && (
           <Button
             onClick={() => onAddToItinerary(destination)}
             disabled={isInItinerary}
-            className="w-full mt-auto"
+            className={`w-full ${hasAddress || hasExactLocation ? '' : 'mt-auto'}`}
             variant={isInItinerary ? "secondary" : "default"}
           >
             {isInItinerary ? (

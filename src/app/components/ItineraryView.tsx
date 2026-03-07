@@ -18,6 +18,7 @@ import { Calendar, Trash2, Download, Share2, Wallet, Star, Map } from 'lucide-re
 import { calculateItinerarySchedule } from '@/app/utils/recommendation';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { createItinerary } from '@/app/api/itineraries';
+import type { RecommendationBudgetSummary } from '@/app/api/recommendations';
 import { formatPeso } from '@/app/utils/currency';
 import { buildGoogleMapsRouteUrl, getDaySegmentDistances } from '@/app/utils/google-maps';
 
@@ -26,6 +27,8 @@ interface ItineraryViewProps {
   tripDays: number;
   userInterests?: string[];
   interestRanks?: Record<string, number>;
+  recommendationAlgorithm?: string | null;
+  recommendationBudget?: RecommendationBudgetSummary | null;
   onRemoveDestination: (destinationId: string) => void;
   onReset: () => void;
   onViewSavedItineraries?: () => void;
@@ -40,6 +43,8 @@ export function ItineraryView({
   tripDays,
   userInterests = [],
   interestRanks,
+  recommendationAlgorithm,
+  recommendationBudget,
   onRemoveDestination,
   onReset,
   onViewSavedItineraries,
@@ -67,6 +72,14 @@ export function ItineraryView({
   
   const totalCost = destinations.reduce((sum, dest) => sum + dest.estimatedCost, 0);
   const totalDuration = destinations.reduce((sum, dest) => sum + getDuration(dest.duration), 0);
+  const isKnapsack =
+    typeof recommendationAlgorithm === 'string' &&
+    recommendationAlgorithm.trim().toLowerCase() === 'knapsack';
+  const maxBudget = recommendationBudget?.maxBudget;
+  const totalSelectedCost = recommendationBudget?.totalSelectedCost ?? totalCost;
+  const remainingBudget = recommendationBudget?.remainingBudget;
+  const utilizationPct = recommendationBudget?.utilizationPct;
+  const showBudgetSummary = Number.isFinite(maxBudget) && (maxBudget as number) > 0;
   const isItineraryFinished =
     itineraryEntryKeys.length > 0 &&
     itineraryEntryKeys.every((key) => finishedDestinationKeys.has(key));
@@ -286,6 +299,19 @@ export function ItineraryView({
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
               We couldn’t fill {emptyDays} {emptyDays === 1 ? 'day' : 'days'} with activities. Add more destinations
               or adjust your preferences to see a fuller schedule.
+            </div>
+          )}
+
+          {showBudgetSummary && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              <p className="font-semibold">
+                {isKnapsack ? 'Optimized by Knapsack' : 'Budget Optimization Applied'}
+              </p>
+              <p className="mt-1">
+                Used {formatPeso(totalSelectedCost)} of {formatPeso(maxBudget as number)}
+                {Number.isFinite(remainingBudget) ? ` (${formatPeso(remainingBudget as number)} remaining)` : ''}.
+                {Number.isFinite(utilizationPct) ? ` Utilization: ${(utilizationPct as number).toFixed(1)}%.` : ''}
+              </p>
             </div>
           )}
 

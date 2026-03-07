@@ -3,6 +3,7 @@ import { Destination, UserPreferences } from '@/app/types/destination';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { fetchDestinations } from '@/app/api/destinations';
 import { fetchServerRecommendations } from '@/app/api/recommendations';
+import type { RecommendationBudgetSummary } from '@/app/api/recommendations';
 import { fetchItineraries } from '@/app/api/itineraries';
 import { clearDestinationRating, fetchMyDestinationRatings, upsertDestinationRating } from '@/app/api/ratings';
 import { AUTH_CHANGE_EVENT, clearAuthSession, getAuthToken, getAuthUser } from '@/app/api/client';
@@ -58,6 +59,8 @@ export default function App() {
   const [viewingSavedItinerary, setViewingSavedItinerary] = useState<SavedItinerary | null>(null);
   const [lastRecommendationRequestId, setLastRecommendationRequestId] = useState<string | null>(null);
   const [lastRecommendationModelVersion, setLastRecommendationModelVersion] = useState<string | null>(null);
+  const [lastRecommendationAlgorithm, setLastRecommendationAlgorithm] = useState<string | null>(null);
+  const [lastRecommendationBudget, setLastRecommendationBudget] = useState<RecommendationBudgetSummary | null>(null);
   const [destinationRatings, setDestinationRatings] = useState<Record<string, number>>({});
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
@@ -249,12 +252,16 @@ export default function App() {
     }
     setLastRecommendationRequestId(serverResult.metadata.recommendationRequestId ?? null);
     setLastRecommendationModelVersion(serverResult.metadata.modelVersion ?? null);
+    setLastRecommendationAlgorithm(serverResult.metadata.algorithmUsed ?? null);
+    setLastRecommendationBudget(serverResult.metadata.budget ?? null);
     applyRecommendations(serverResult.destinations, prefs, serverResult.scores);
 
     trackEvent('recommendation_requested', {
       metadata: {
         recommendationRequestId: serverResult.metadata.recommendationRequestId,
         modelVersion: serverResult.metadata.modelVersion,
+        algorithmUsed: serverResult.metadata.algorithmUsed,
+        budgetSummary: serverResult.metadata.budget,
         requestedLimit: 6,
         returnedCount: serverResult.destinations.length,
         budget: prefs.budget,
@@ -420,6 +427,10 @@ export default function App() {
     setRecommendations([]);
     setPreferences(null);
     setViewingSavedItinerary(null);
+    setLastRecommendationRequestId(null);
+    setLastRecommendationModelVersion(null);
+    setLastRecommendationAlgorithm(null);
+    setLastRecommendationBudget(null);
   };
 
   const handleViewItinerary = () => {
@@ -441,6 +452,10 @@ export default function App() {
     });
     setViewingSavedItinerary(savedItinerary);
     setItinerary(savedItinerary.destinations);
+    setLastRecommendationRequestId(null);
+    setLastRecommendationModelVersion(null);
+    setLastRecommendationAlgorithm(null);
+    setLastRecommendationBudget(null);
     setPreferences({ 
       duration: savedItinerary.tripDays,
       budget: savedItinerary.totalCost,
@@ -1054,6 +1069,8 @@ export default function App() {
             tripDays={preferences.duration}
             userInterests={preferences.interests}
             interestRanks={preferences.interestRanks}
+            recommendationAlgorithm={lastRecommendationAlgorithm}
+            recommendationBudget={lastRecommendationBudget}
             onRemoveDestination={handleRemoveFromItinerary}
             onReset={handleReset}
             onViewSavedItineraries={() => setCurrentView('saved-itineraries')}
