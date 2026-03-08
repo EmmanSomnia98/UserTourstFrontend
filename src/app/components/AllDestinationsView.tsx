@@ -134,7 +134,11 @@ export function AllDestinationsView({
             Browse all destinations in the system and search quickly by name, type, or interest.
           </p>
         </div>
-        <Button variant="outline" onClick={onBack}>
+        <Button
+          variant="outline"
+          onClick={onBack}
+          className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md"
+        >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
         </Button>
@@ -176,7 +180,7 @@ export function AllDestinationsView({
               key={destination.id}
               role="button"
               tabIndex={0}
-              className="h-full cursor-pointer"
+              className="h-full cursor-pointer transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-[1.01] hover:drop-shadow-lg focus-visible:-translate-y-1 focus-visible:scale-[1.01] focus-visible:drop-shadow-lg"
               onClick={() => setSelectedDestination(destination)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {

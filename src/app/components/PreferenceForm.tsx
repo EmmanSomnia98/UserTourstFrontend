@@ -147,6 +147,11 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
 
   const mainInterestIds = interestOptionsWithSubs.map((option) => option.id);
   const allSubInterestIds = interestOptionsWithSubs.flatMap((option) => option.subInterests.map((sub) => sub.id));
+  const hasSelectedSubInterest = (mainInterestId: string, selectedInterests: string[]) => {
+    const mainOption = interestOptionsWithSubs.find((opt) => opt.id === mainInterestId);
+    if (!mainOption) return false;
+    return mainOption.subInterests.some((sub) => selectedInterests.includes(sub.id));
+  };
 
   const normalizeSchemaEntry = (entry: InterestSchemaMainInterest): InterestSchemaMainInterest | null => {
     const id = typeof entry.id === 'string' ? entry.id.trim() : '';
@@ -226,10 +231,18 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
       setMainInterestOrder(prev => prev.filter(id => id !== interest));
       setExpandedInterests(prev => prev.filter(i => i !== interest));
     } else {
-      // Add main interest and expand to show sub-interests
-      setInterests(prev => [...prev, interest]);
-      setMainInterestOrder(prev => (prev.includes(interest) ? prev : [...prev, interest]));
-      setExpandedInterests(prev => [...prev, interest]);
+      // Keep rank once main interest is picked.
+      // Auto-close other dropdowns only if they have no selected sub-interests.
+      const nextInterests = [...interests, interest];
+      setInterests(nextInterests);
+      setMainInterestOrder((prev) => {
+        const kept = prev.filter((id) => hasSelectedSubInterest(id, nextInterests));
+        return kept.includes(interest) ? kept : [...kept, interest];
+      });
+      setExpandedInterests((prev) => {
+        const kept = prev.filter((id) => hasSelectedSubInterest(id, nextInterests));
+        return kept.includes(interest) ? kept : [...kept, interest];
+      });
       setShowInterestError(false);
       setShowSubInterestError(false);
     }
@@ -238,11 +251,19 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
   const toggleSubInterest = (mainInterest: string, subInterestId: string) => {
     setInterests(prev => {
       if (prev.includes(subInterestId)) {
-        return prev.filter(i => i !== subInterestId);
+        const nextInterests = prev.filter(i => i !== subInterestId);
+        const mainOption = interestOptionsWithSubs.find((opt) => opt.id === mainInterest);
+        const subIds = (mainOption?.subInterests ?? []).map((sub) => sub.id);
+        const hasAnySelectedSub = subIds.some((id) => nextInterests.includes(id));
+        if (!hasAnySelectedSub) {
+          // Auto-close when no sub-interest is selected for this main interest.
+          setExpandedInterests(expanded => expanded.filter(id => id !== mainInterest));
+        }
+        return nextInterests;
       } else {
         // Make sure main interest is also selected
+        setMainInterestOrder(order => (order.includes(mainInterest) ? order : [...order, mainInterest]));
         if (!prev.includes(mainInterest)) {
-          setMainInterestOrder(order => (order.includes(mainInterest) ? order : [...order, mainInterest]));
           setShowInterestError(false);
           setShowSubInterestError(false);
           return [...prev, mainInterest, subInterestId];
@@ -302,7 +323,12 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
 
     try {
       const autoRankedMainInterests = mainInterestOrder
-        .filter((interestId) => mainInterestIds.includes(interestId) && interests.includes(interestId))
+        .filter(
+          (interestId) =>
+            mainInterestIds.includes(interestId) &&
+            interests.includes(interestId) &&
+            hasSelectedSubInterest(interestId, interests)
+        )
         .slice(0, 9);
       const selectedMainInterests = autoRankedMainInterests;
 
@@ -425,7 +451,12 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
               </div>
               <Button
                 type="button"
-                variant={locationStatus === 'granted' ? 'outline' : 'default'}
+                variant="outline"
+                className={
+                  locationStatus === 'granted'
+                    ? undefined
+                    : 'border-red-500 text-red-600 hover:border-red-600 hover:bg-red-50 hover:text-red-700'
+                }
                 onClick={handleAllowLocation}
                 disabled={locationStatus === 'requesting'}
               >
@@ -474,6 +505,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
               const isExpanded = expandedInterests.includes(option.id);
               const rankIndex = mainInterestOrder.findIndex((interestId) => interestId === option.id);
               const mainInterestRank = rankIndex >= 0 ? rankIndex + 1 : null;
+              const isRanked = mainInterestRank !== null;
               
               return (
                 <div key={option.id} className="space-y-2">
@@ -482,14 +514,14 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
                       type="button"
                       onClick={() => toggleInterest(option.id)}
                       className={`flex-1 flex items-center justify-between gap-3 rounded-lg border-2 p-4 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md ${
-                        isSelected
+                        isRanked
                           ? 'border-blue-500 bg-blue-50'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <Icon className={`w-6 h-6 ${isSelected ? 'text-blue-500' : 'text-gray-600'}`} />
-                        <span className={`text-sm ${isSelected ? 'font-medium' : ''}`}>
+                        <Icon className={`w-6 h-6 ${isRanked ? 'text-blue-500' : 'text-gray-600'}`} />
+                        <span className={`text-sm ${isRanked ? 'font-medium' : ''}`}>
                           {option.label}
                         </span>
                       </div>
@@ -509,31 +541,39 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
                         </div>
                       )}
                     </button>
-                    {isSelected && (
+                    {isSelected && mainInterestRank !== null && (
                       <div className="w-20 h-9 rounded-md bg-gray-100 text-gray-700 text-xs font-medium flex items-center justify-center">
-                        {mainInterestRank ? `#${mainInterestRank}` : ''}
+                        {`#${mainInterestRank}`}
                       </div>
                     )}
                   </div>
                   
                   {/* Sub-interests */}
-                  {isSelected && isExpanded && (
-                    <div className="ml-4 space-y-2 border-l-2 border-blue-200 py-2 pl-4">
-                      {option.subInterests.map((subInterest) => (
-                        <div key={subInterest.id} className="flex items-center space-x-2 rounded-md px-2 py-1 transition-colors hover:bg-blue-50">
-                          <Checkbox
-                            id={`${option.id}-${subInterest.id}`}
-                            checked={interests.includes(subInterest.id)}
-                            onCheckedChange={() => toggleSubInterest(option.id, subInterest.id)}
-                          />
-                          <label
-                            htmlFor={`${option.id}-${subInterest.id}`}
-                            className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                          >
-                            {subInterest.label}
-                          </label>
-                        </div>
-                      ))}
+                  {isSelected && (
+                    <div
+                      className={`ml-4 overflow-hidden border-l-2 border-blue-200 pl-4 transition-all duration-300 ease-out ${
+                        isExpanded
+                          ? 'max-h-96 py-2 opacity-100'
+                          : 'pointer-events-none max-h-0 py-0 opacity-0'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        {option.subInterests.map((subInterest) => (
+                          <div key={subInterest.id} className="flex items-center space-x-2 rounded-md px-2 py-1 transition-colors hover:bg-blue-50">
+                            <Checkbox
+                              id={`${option.id}-${subInterest.id}`}
+                              checked={interests.includes(subInterest.id)}
+                              onCheckedChange={() => toggleSubInterest(option.id, subInterest.id)}
+                            />
+                            <label
+                              htmlFor={`${option.id}-${subInterest.id}`}
+                              className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                            >
+                              {subInterest.label}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
