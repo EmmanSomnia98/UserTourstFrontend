@@ -633,7 +633,7 @@ export function EditableItineraryView({
           }
         }}
       >
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:max-h-[90vh] sm:max-w-2xl sm:p-6">
           {selectedDestination && (
             <>
               <DialogHeader>
