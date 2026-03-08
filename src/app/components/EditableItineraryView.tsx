@@ -9,8 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { DestinationLocationPanel } from '@/app/components/DestinationLocationPanel';
 import { DestinationImageGallery } from '@/app/components/DestinationImageGallery';
-import { Calendar, Clock, Trash2, Plus, Save, X, Edit2, Wallet, Star, Map as MapIcon } from 'lucide-react';
-import { calculateItinerarySchedule } from '@/app/utils/recommendation';
+import { Calendar, Trash2, Plus, Save, X, Edit2, Wallet, Star, Map as MapIcon } from 'lucide-react';
+import { calculateItinerarySchedule, getDestinationStayHours } from '@/app/utils/recommendation';
 import { createItinerary, deleteRemoteItinerary } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
 import { inviteCollaboratorToItinerary, pushItinerarySync } from '@/app/api/collaboration';
@@ -57,8 +57,6 @@ export function EditableItineraryView({
   const [isInviting, setIsInviting] = useState(false);
   const [inviteMessage, setInviteMessage] = useState<string | null>(null);
   const [liveNotice, setLiveNotice] = useState<string | null>(null);
-  const getDuration = (value: number) => (Number.isFinite(value) ? value : 0);
-
   const destinationById = useMemo(() => {
     const map = new Map<string, Destination>();
     allDestinations.forEach((destination) => {
@@ -69,7 +67,7 @@ export function EditableItineraryView({
 
   const schedule = calculateItinerarySchedule(destinations, tripDays);
   const totalCost = destinations.reduce((sum, dest) => sum + dest.estimatedCost, 0);
-  const totalDuration = destinations.reduce((sum, dest) => sum + getDuration(dest.duration), 0);
+  const totalDuration = destinations.reduce((sum, dest) => sum + getDestinationStayHours(dest), 0);
   // Get destinations not already in itinerary
   const availableDestinations = allDestinations.filter(
     dest => !destinations.some(d => d.id === dest.id)
@@ -344,16 +342,11 @@ export function EditableItineraryView({
             {inviteMessage && <p className="mt-2 text-xs text-slate-600">{inviteMessage}</p>}
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="text-center p-4 bg-blue-50 rounded-lg transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm">
               <Calendar className="w-6 h-6 mx-auto mb-2 text-blue-600" />
               <div className="text-2xl font-semibold">{tripDays}</div>
               <div className="text-sm text-gray-600">Days</div>
-            </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm">
-              <Clock className="w-6 h-6 mx-auto mb-2 text-green-600" />
-              <div className="text-2xl font-semibold">{totalDuration}h</div>
-              <div className="text-sm text-gray-600">Total Time</div>
             </div>
             <div className="text-center p-4 bg-purple-50 rounded-lg transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm">
               <Wallet className="w-6 h-6 mx-auto mb-2 text-purple-600" />
@@ -391,9 +384,7 @@ export function EditableItineraryView({
                       <p className="text-xs text-gray-600 line-clamp-1">{dest.description}</p>
                     </div>
                     <div className="flex items-center gap-2 text-xs text-gray-600">
-                      <Clock className="w-3 h-3" />
-                      <span>{dest.duration}h</span>
-                      <Wallet className="w-3 h-3 ml-2" />
+                      <Wallet className="w-3 h-3" />
                       <span>{formatPeso(dest.estimatedCost)}</span>
                     </div>
                   </div>
@@ -507,10 +498,6 @@ export function EditableItineraryView({
                             </div>
 
                             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-                              <div className="flex items-center gap-1">
-                                <Clock className="w-4 h-4" />
-                                <span>{getDuration(dest.duration)}h</span>
-                              </div>
                               <div className="flex items-center gap-1">
                                 <Wallet className="w-4 h-4" />
                                 <span>{formatPeso(dest.estimatedCost)}</span>
@@ -656,10 +643,6 @@ export function EditableItineraryView({
                   <Badge variant="outline">{selectedDestination.difficulty}</Badge>
                 </div>
                 <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
-                    {getDuration(selectedDestination.duration)}h
-                  </span>
                   <span className="inline-flex items-center gap-1">
                     <Wallet className="w-4 h-4" />
                     {formatPeso(selectedDestination.estimatedCost)}

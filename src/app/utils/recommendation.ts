@@ -29,6 +29,24 @@ function hasValidLocation(destination: Destination): boolean {
   return isValidCoordinate(lat, -90, 90) && isValidCoordinate(lng, -180, 180);
 }
 
+export function getDestinationStayHours(destination: Destination): number {
+  const parsedDuration = Number.isFinite(destination.duration) ? destination.duration : 0;
+  if (parsedDuration > 0) {
+    return Math.min(12, Math.max(0.5, parsedDuration));
+  }
+
+  // Fallback estimates when the source record has no duration yet.
+  const fallbackByType: Record<Destination['type'], number> = {
+    nature: 3,
+    adventure: 4,
+    cultural: 2.5,
+    relaxation: 3.5,
+    historical: 2.5,
+  };
+
+  return fallbackByType[destination.type] ?? 3;
+}
+
 function haversineKm(
   a: { lat: number; lng: number },
   b: { lat: number; lng: number }
@@ -285,9 +303,15 @@ export function calculateItinerarySchedule(
       return a.originalIndex - b.originalIndex;
     });
 
-  // Seed each day with one top-ranked destination first, then place the rest by nearest-day fit.
+  // Distribute destinations across days using a duration-aware load model, then refine by proximity.
   const dayBuckets = Array.from({ length: totalDays }, () => [] as Destination[]);
-  const targetPerDay = Math.ceil(rankedDestinations.length / totalDays);
+  const dayHours = Array.from({ length: totalDays }, () => 0);
+  const totalRequestedHours = rankedDestinations.reduce(
+    (sum, item) => sum + getDestinationStayHours(item.destination),
+    0
+  );
+  const targetHoursPerDay = totalRequestedHours / totalDays;
+  const dailyHourCap = Math.max(6, targetHoursPerDay * 1.2);
 
   const calculateDayDistanceScore = (candidate: Destination, dayDestinations: Destination[]): number => {
     if (!hasValidLocation(candidate)) return Number.POSITIVE_INFINITY;
@@ -303,22 +327,32 @@ export function calculateItinerarySchedule(
     return nearest * 0.7 + average * 0.3;
   };
 
-  rankedDestinations.forEach(({ destination }, index) => {
-    if (index < totalDays) {
-      dayBuckets[index].push(destination);
-      return;
-    }
-
+  rankedDestinations.forEach(({ destination }) => {
+    const destinationHours = getDestinationStayHours(destination);
     let bestDayIndex = 0;
     let bestScore = Number.POSITIVE_INFINITY;
+    let foundFeasibleDay = false;
 
     for (let dayIndex = 0; dayIndex < totalDays; dayIndex++) {
       const dayDestinations = dayBuckets[dayIndex];
+      const projectedHours = dayHours[dayIndex] + destinationHours;
+      const isFeasible = projectedHours <= dailyHourCap;
+
+      if (isFeasible) {
+        foundFeasibleDay = true;
+      }
+      if (!isFeasible && foundFeasibleDay) {
+        continue;
+      }
+
       const distanceScore = calculateDayDistanceScore(destination, dayDestinations);
       const normalizedDistanceScore = Number.isFinite(distanceScore) ? distanceScore : 50;
-      const loadPenalty = dayDestinations.length * 2.5;
-      const overTargetPenalty = dayDestinations.length >= targetPerDay ? 20 : 0;
-      const combinedScore = normalizedDistanceScore + loadPenalty + overTargetPenalty;
+      const countPenalty = dayDestinations.length * 1.5;
+      const hourLoadPenalty = dayHours[dayIndex] * 2.5;
+      const targetOverflowPenalty = projectedHours > targetHoursPerDay ? (projectedHours - targetHoursPerDay) * 6 : 0;
+      const hardCapPenalty = isFeasible ? 0 : (projectedHours - dailyHourCap) * 60;
+      const combinedScore =
+        normalizedDistanceScore + countPenalty + hourLoadPenalty + targetOverflowPenalty + hardCapPenalty;
 
       if (combinedScore < bestScore) {
         bestScore = combinedScore;
@@ -326,12 +360,13 @@ export function calculateItinerarySchedule(
         continue;
       }
 
-      if (combinedScore === bestScore && dayDestinations.length < dayBuckets[bestDayIndex].length) {
+      if (combinedScore === bestScore && dayHours[dayIndex] < dayHours[bestDayIndex]) {
         bestDayIndex = dayIndex;
       }
     }
 
     dayBuckets[bestDayIndex].push(destination);
+    dayHours[bestDayIndex] += destinationHours;
   });
 
   for (let day = 1; day <= totalDays; day++) {

@@ -110,6 +110,40 @@ function normalizeName(value: unknown): string {
   return value.trim().toLowerCase();
 }
 
+function normalizeInterestToken(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+}
+
+function filterDestinationsBySelectedSubInterests(
+  destinations: Destination[],
+  preferences: UserPreferences
+): Destination[] {
+  const selected = new Set(
+    (preferences.subInterests ?? preferences.interests ?? [])
+      .map((item) => normalizeInterestToken(item))
+      .filter(Boolean)
+  );
+
+  if (selected.size === 0) return destinations;
+
+  return destinations.filter((destination) => {
+    const destinationInterests = (
+      Array.isArray(destination.subInterests) && destination.subInterests.length > 0
+        ? destination.subInterests
+        : destination.interests
+    )
+      .map((item) => normalizeInterestToken(item))
+      .filter(Boolean);
+
+    if (destinationInterests.length === 0) return false;
+    return destinationInterests.some((interest) => selected.has(interest));
+  });
+}
+
 function extractItems(payload: RecommendationsPayload): RecommendationItem[] {
   if (Array.isArray(payload)) return payload;
   if ('destinations' in payload && Array.isArray(payload.destinations)) return payload.destinations;
@@ -202,15 +236,18 @@ export async function fetchServerRecommendations(
     if (allDestinations.length > 0) {
       console.warn('Recommendations API failed; falling back to local scoring.', lastError);
       const fallbackScores = new Map<string, number>();
-      const fallbackDestinations = [...allDestinations]
+      const rankedFallbackDestinations = [...allDestinations]
         .map((destination) => {
           const score = calculateContentScore(destination, preferences);
           fallbackScores.set(destination.id, score);
           return { destination, score };
         })
         .sort((a, b) => b.score - a.score)
-        .slice(0, Math.max(1, Math.min(limit, allDestinations.length)))
         .map((item) => item.destination);
+      const fallbackDestinations = filterDestinationsBySelectedSubInterests(
+        rankedFallbackDestinations,
+        preferences
+      ).slice(0, Math.max(1, Math.min(limit, allDestinations.length)));
 
       return {
         destinations: fallbackDestinations,
@@ -289,15 +326,18 @@ export async function fetchServerRecommendations(
         `Server returned ${items.length} recommendations but none matched loaded destinations (unmapped: ${unmappedCount}). Falling back to local scoring.`
       );
       const fallbackScores = new Map<string, number>();
-      const fallbackDestinations = [...allDestinations]
+      const rankedFallbackDestinations = [...allDestinations]
         .map((destination) => {
           const score = calculateContentScore(destination, preferences);
           fallbackScores.set(destination.id, score);
           return { destination, score };
         })
         .sort((a, b) => b.score - a.score)
-        .slice(0, Math.max(1, Math.min(limit, allDestinations.length)))
         .map((item) => item.destination);
+      const fallbackDestinations = filterDestinationsBySelectedSubInterests(
+        rankedFallbackDestinations,
+        preferences
+      ).slice(0, Math.max(1, Math.min(limit, allDestinations.length)));
 
       return {
         destinations: fallbackDestinations,
@@ -311,7 +351,8 @@ export async function fetchServerRecommendations(
   }
 
   const effectiveLimit = Math.max(1, Math.min(limit, allDestinations.length || limit));
-  const limitedDestinations = destinations.slice(0, effectiveLimit);
+  const hardFilteredDestinations = filterDestinationsBySelectedSubInterests(destinations, preferences);
+  const limitedDestinations = hardFilteredDestinations.slice(0, effectiveLimit);
   const limitedScores = new Map<string, number>();
   limitedDestinations.forEach((destination) => {
     const score = scores.get(destination.id);

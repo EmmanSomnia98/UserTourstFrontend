@@ -10,7 +10,7 @@ import { AUTH_CHANGE_EVENT, clearAuthSession, getAuthToken, getAuthUser } from '
 import { type AuthUser } from '@/app/api/auth';
 import { buildFeedbackEvent, flushFeedbackQueue, recordFeedbackEvent } from '@/app/api/feedback';
 import { useIsMobile } from '@/app/components/ui/use-mobile';
-import { calculateContentScore } from '@/app/utils/recommendation';
+import { calculateContentScore, getDestinationStayHours } from '@/app/utils/recommendation';
 import { GeoPoint } from '@/app/utils/travel';
 import { PreferenceForm } from '@/app/components/PreferenceForm';
 import { UserLogin } from '@/app/components/UserLogin';
@@ -213,6 +213,30 @@ export default function App() {
     return scores;
   };
 
+  const deriveRecommendationLimit = (prefs: UserPreferences): number => {
+    const totalDays = Math.max(1, Math.floor(prefs.duration));
+    const targetHoursPerDayByActivity: Record<UserPreferences['activityLevel'], number> = {
+      relaxed: 6,
+      moderate: 7.5,
+      active: 9,
+    };
+
+    const targetHoursPerDay = targetHoursPerDayByActivity[prefs.activityLevel] ?? 7.5;
+    const totalTargetHours = totalDays * targetHoursPerDay;
+    const avgStayHours =
+      allDestinations.length > 0
+        ? allDestinations.reduce((sum, destination) => sum + getDestinationStayHours(destination), 0) /
+          allDestinations.length
+        : 3;
+    const safeAvgStayHours = Number.isFinite(avgStayHours) && avgStayHours > 0 ? avgStayHours : 3;
+
+    const estimatedCount = Math.round(totalTargetHours / safeAvgStayHours);
+    const rawMinCount = Math.max(totalDays, 4);
+    const rawMaxCount = allDestinations.length > 0 ? Math.min(allDestinations.length, totalDays * 6) : totalDays * 6;
+    const minCount = Math.max(1, Math.min(rawMinCount, rawMaxCount));
+    return Math.max(minCount, Math.min(rawMaxCount, estimatedCount));
+  };
+
   const applyRecommendations = (
     recommended: Destination[],
     prefs: UserPreferences,
@@ -239,7 +263,8 @@ export default function App() {
 
   const handlePreferencesSubmit = async (prefs: UserPreferences) => {
     setPreferences(prefs);
-    const serverResult = await fetchServerRecommendations(prefs, 6, allDestinations);
+    const requestedLimit = deriveRecommendationLimit(prefs);
+    const serverResult = await fetchServerRecommendations(prefs, requestedLimit, allDestinations);
     if (serverResult.destinations.length === 0) {
       const hasBudgetConstraint = Number.isFinite(prefs.budget) && prefs.budget > 0;
       if (hasBudgetConstraint) {
@@ -279,7 +304,7 @@ export default function App() {
         modelVersion: serverResult.metadata.modelVersion,
         algorithmUsed: serverResult.metadata.algorithmUsed,
         budgetSummary: serverResult.metadata.budget,
-        requestedLimit: 6,
+        requestedLimit,
         returnedCount: serverResult.destinations.length,
         budget: prefs.budget,
         duration: prefs.duration,

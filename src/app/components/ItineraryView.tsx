@@ -17,7 +17,7 @@ import { DestinationLocationPanel } from '@/app/components/DestinationLocationPa
 import { DestinationImageGallery } from '@/app/components/DestinationImageGallery';
 import { GeoPoint } from '@/app/utils/travel';
 import { Calendar, Trash2, Download, Share2, Wallet, Star, Map } from 'lucide-react';
-import { calculateItinerarySchedule } from '@/app/utils/recommendation';
+import { calculateItinerarySchedule, getDestinationStayHours } from '@/app/utils/recommendation';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { createItinerary } from '@/app/api/itineraries';
 import type { RecommendationBudgetSummary } from '@/app/api/recommendations';
@@ -63,7 +63,10 @@ export function ItineraryView({
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
   const [finishedDestinationKeys, setFinishedDestinationKeys] = useState<Set<string>>(new Set());
   const saveRequestInFlight = useRef(false);
-  const getDuration = (value: number) => (Number.isFinite(value) ? value : 0);
+  const formatHours = (value: number) => {
+    const rounded = Math.round(value * 10) / 10;
+    return Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(1);
+  };
   const schedule = calculateItinerarySchedule(destinations, tripDays, userInterests, interestRanks);
   const emptyDays = Array.from(schedule.entries()).filter(([, dayDestinations]) => dayDestinations.length === 0).length;
   const getEntryKey = (destination: Destination, day: number, index: number) =>
@@ -73,7 +76,7 @@ export function ItineraryView({
   );
   
   const totalCost = destinations.reduce((sum, dest) => sum + dest.estimatedCost, 0);
-  const totalDuration = destinations.reduce((sum, dest) => sum + getDuration(dest.duration), 0);
+  const totalDuration = destinations.reduce((sum, dest) => sum + getDestinationStayHours(dest), 0);
   const isKnapsack =
     typeof recommendationAlgorithm === 'string' &&
     recommendationAlgorithm.trim().toLowerCase() === 'knapsack';
@@ -226,7 +229,7 @@ export function ItineraryView({
     lines.push('');
     lines.push(`Total Duration: ${tripDays} days`);
     lines.push(`Total Cost: ${formatPeso(totalCost)}`);
-    lines.push(`Total Activity Hours: ${totalDuration}h`);
+    lines.push(`Total Activity Hours: ${formatHours(totalDuration)}h`);
     lines.push('');
     schedule.forEach((dayDestinations, day) => {
       lines.push(`Day ${day}:`);
