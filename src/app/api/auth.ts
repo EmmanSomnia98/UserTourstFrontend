@@ -23,11 +23,21 @@ function normalizeAuth(payload: AuthPayload): AuthSession<AuthUser> {
 
 export async function registerUser(name: string, email: string, password: string) {
   const payload = await apiPost<AuthPayload>('/api/auth/register', { fullName: name, email, password });
-  const session = normalizeAuth(payload);
-  if (session.token || session.user) {
-    setAuthSession(session.token, session.user);
+  const registrationSession = normalizeAuth(payload);
+
+  if (registrationSession.token) {
+    setAuthSession(registrationSession.token, registrationSession.user);
+    return registrationSession;
   }
-  return session;
+
+  // Some backends create the account but do not issue a token on register.
+  // In that case, immediately log in using the same credentials.
+  const loginSession = await loginUser(email, password);
+  if (loginSession.token || loginSession.user) {
+    return loginSession;
+  }
+
+  return registrationSession;
 }
 
 export async function loginUser(email: string, password: string) {

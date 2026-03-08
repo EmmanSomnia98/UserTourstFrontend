@@ -1048,9 +1048,10 @@ export default function App() {
           <div className="py-8">
             <UserSignup
               onSignup={(session) => {
-                const hasToken = Boolean(session.token);
-                setIsAuthenticated(hasToken);
-                setCurrentUser(hasToken ? (session.user ?? null) : null);
+                const token = session.token ?? getAuthToken();
+                const user = session.user ?? getAuthUser<AuthUser>();
+                setIsAuthenticated(Boolean(token));
+                setCurrentUser(user ?? null);
                 setCurrentView('welcome');
               }}
               onBack={() => setCurrentView('welcome')}
