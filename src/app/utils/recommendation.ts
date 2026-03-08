@@ -327,7 +327,14 @@ export function calculateItinerarySchedule(
     return nearest * 0.7 + average * 0.3;
   };
 
-  rankedDestinations.forEach(({ destination }) => {
+  const seededCount = Math.min(totalDays, rankedDestinations.length);
+  for (let dayIndex = 0; dayIndex < seededCount; dayIndex += 1) {
+    const destination = rankedDestinations[dayIndex].destination;
+    dayBuckets[dayIndex].push(destination);
+    dayHours[dayIndex] += getDestinationStayHours(destination);
+  }
+
+  rankedDestinations.slice(seededCount).forEach(({ destination }) => {
     const destinationHours = getDestinationStayHours(destination);
     let bestDayIndex = 0;
     let bestScore = Number.POSITIVE_INFINITY;
