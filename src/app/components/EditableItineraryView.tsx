@@ -445,7 +445,10 @@ export function EditableItineraryView({
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Between destinations</p>
                   <div className="mt-1 space-y-1">
                     {daySegments.map((segment, segmentIndex) => (
-                      <p key={`${day}-${segment.fromName}-${segment.toName}-${segmentIndex}`} className="text-xs text-slate-700">
+                      <p
+                        key={`${day}-${segment.fromName}-${segment.toName}-${segmentIndex}`}
+                        className="break-words text-xs text-slate-700"
+                      >
                         {segment.fromName} → {segment.toName}: <span className="font-medium">{segment.distanceLabel}</span>
                       </p>
                     ))}
@@ -476,16 +479,16 @@ export function EditableItineraryView({
                       }}
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="flex gap-3 sm:gap-4 flex-1">
+                        <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:gap-4">
                           <img
                             src={dest.image}
                             alt={dest.name}
-                            className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-lg flex-shrink-0 transition-transform duration-300 group-hover:scale-105"
+                            className="h-36 w-full rounded-lg object-cover transition-transform duration-300 group-hover:scale-105 sm:h-24 sm:w-24 sm:flex-shrink-0"
                           />
-                          <div className="flex-1 space-y-2">
+                          <div className="min-w-0 flex-1 space-y-2">
                             <div>
-                              <h4 className="font-semibold">{dest.name}</h4>
-                              <p className="text-sm text-gray-600 line-clamp-2">{dest.description}</p>
+                              <h4 className="break-words font-semibold">{dest.name}</h4>
+                              <p className="line-clamp-2 break-words text-sm text-gray-600">{dest.description}</p>
                             </div>
                             
                             <div className="flex flex-wrap gap-2">
@@ -498,7 +501,7 @@ export function EditableItineraryView({
                             </div>
 
                             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-                              <div className="flex items-center gap-1">
+                              <div className="flex flex-wrap items-center gap-1">
                                 <Wallet className="w-4 h-4" />
                                 <span>{formatPeso(dest.estimatedCost)}</span>
                               </div>

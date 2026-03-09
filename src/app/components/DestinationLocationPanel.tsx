@@ -34,28 +34,28 @@ export function DestinationLocationPanel({ destination }: DestinationLocationPan
     : null;
 
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+    <div className="min-w-0 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
       <p className="text-xs font-medium text-slate-700">Location</p>
       {destination.address?.fullAddress && (
-        <p className="text-xs text-slate-600">{destination.address.fullAddress}</p>
+        <p className="break-words text-xs text-slate-600">{destination.address.fullAddress}</p>
       )}
-      <p className="text-xs text-slate-600">
+      <p className="break-words text-xs text-slate-600">
         Purok: {destination.address?.purok || 'Not provided'}
       </p>
-      <p className="text-xs text-slate-600">
+      <p className="break-words text-xs text-slate-600">
         Barangay: {destination.address?.barangay || 'Not provided'}
       </p>
-      <p className="text-xs text-slate-600">
+      <p className="break-words text-xs text-slate-600">
         City: {destination.address?.city || 'Not provided'}
       </p>
-      <p className="text-xs text-slate-600">
+      <p className="break-words text-xs text-slate-600">
         Province: {destination.address?.province || 'Not provided'}
       </p>
       {!hasAddress && !hasExactLocation && (
         <p className="text-xs text-slate-500">Address and coordinates are not available for this destination.</p>
       )}
       {hasExactLocation && (
-        <p className="text-[11px] text-slate-500">{exactLocationLabel}</p>
+        <p className="break-words text-[11px] text-slate-500">{exactLocationLabel}</p>
       )}
       {hasExactLocation && (
         <a
