@@ -9,7 +9,6 @@ import {
   Heart, 
   Activity, 
   DollarSign, 
-  Compass, 
   Star 
 } from 'lucide-react';
 
@@ -79,7 +78,7 @@ export function RecommendationBreakdown({
             className="h-2"
           />
           <p className="text-xs text-gray-600">
-            Based on your interests, activity level, budget, and travel style
+            Based on your interests, activity level, and budget
           </p>
         </div>
       </div>
@@ -110,14 +109,6 @@ export function RecommendationBreakdown({
             <span className="text-gray-700">Budget:</span>
             <span className="ml-auto font-medium">
               {Math.round(scores.breakdown.budget)}
-            </span>
-          </div>
-          
-          <div className="flex items-center gap-2 text-sm">
-            <Compass className="w-4 h-4 text-blue-500" />
-            <span className="text-gray-700">Style:</span>
-            <span className="ml-auto font-medium">
-              {Math.round(scores.breakdown.travelStyle)}
             </span>
           </div>
           

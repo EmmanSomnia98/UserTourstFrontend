@@ -36,7 +36,6 @@ export interface UserPreferences {
   timePreference?: 'day_only' | 'night_only' | 'whole_day';
   budget: number; // Changed from 'low' | 'medium' | 'high' to number
   duration: number; // days
-  travelStyle: string[];
   collaborators?: string[];
   collaboratorIds?: string[];
 }

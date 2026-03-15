@@ -346,7 +346,6 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
         timePreference: 'whole_day',
         budget: budgetNum,
         duration: durationNum,
-        travelStyle: [],
       });
     } catch (error) {
       console.error('Failed to submit preferences:', error);

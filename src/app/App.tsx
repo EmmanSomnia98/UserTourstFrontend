@@ -309,7 +309,6 @@ export default function App() {
         budget: prefs.budget,
         duration: prefs.duration,
         interestCount: prefs.interests.length,
-        travelStyleCount: prefs.travelStyle.length,
       },
     });
 
@@ -503,7 +502,7 @@ export default function App() {
       budget: savedItinerary.totalCost,
       activityLevel: 'moderate' as const,
       interests: [],
-      travelStyle: []
+      subInterests: [],
     });
   };
 
