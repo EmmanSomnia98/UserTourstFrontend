@@ -26,11 +26,13 @@ import { buildGoogleMapsRouteUrl, getDaySegmentDistances } from '@/app/utils/goo
 
 interface ItineraryViewProps {
   destinations: Destination[];
+  allDestinations: Destination[];
   tripDays: number;
   userInterests?: string[];
   interestRanks?: Record<string, number>;
   recommendationAlgorithm?: string | null;
   recommendationBudget?: RecommendationBudgetSummary | null;
+  onAddDestination: (destination: Destination) => void;
   onRemoveDestination: (destinationId: string) => void;
   onReset: () => void;
   onViewSavedItineraries?: () => void;
@@ -42,11 +44,13 @@ interface ItineraryViewProps {
 
 export function ItineraryView({
   destinations,
+  allDestinations,
   tripDays,
   userInterests = [],
   interestRanks,
   recommendationAlgorithm,
   recommendationBudget,
+  onAddDestination,
   onRemoveDestination,
   onReset,
   onViewSavedItineraries,
@@ -62,6 +66,7 @@ export function ItineraryView({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
   const [finishedDestinationKeys, setFinishedDestinationKeys] = useState<Set<string>>(new Set());
+  const [expandedAddDay, setExpandedAddDay] = useState<number | null>(null);
   const saveRequestInFlight = useRef(false);
   const formatHours = (value: number) => {
     const rounded = Math.round(value * 10) / 10;
@@ -73,6 +78,9 @@ export function ItineraryView({
     `${day}-${index}-${destination.id || destination.name}`;
   const itineraryEntryKeys = Array.from(schedule.entries()).flatMap(([day, dayDestinations]) =>
     dayDestinations.map((destination, index) => getEntryKey(destination, day, index))
+  );
+  const availableDestinations = allDestinations.filter(
+    (candidate) => !destinations.some((selected) => selected.id === candidate.id)
   );
   
   const totalCost = destinations.reduce((sum, dest) => sum + dest.estimatedCost, 0);
@@ -352,20 +360,61 @@ export function ItineraryView({
                   <h3 className="font-semibold text-lg">Day {day}</h3>
                 </div>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!dayRouteUrl}
-                className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm disabled:hover:translate-y-0 disabled:hover:shadow-none"
-                onClick={() => {
-                  if (!dayRouteUrl) return;
-                  window.open(dayRouteUrl, '_blank', 'noopener,noreferrer');
-                }}
-              >
-                <Map className="mr-2 h-4 w-4" />
-                View Day on Map
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm"
+                  onClick={() => setExpandedAddDay((current) => (current === day ? null : day))}
+                >
+                  Add More Destinations
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!dayRouteUrl}
+                  className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                  onClick={() => {
+                    if (!dayRouteUrl) return;
+                    window.open(dayRouteUrl, '_blank', 'noopener,noreferrer');
+                  }}
+                >
+                  <Map className="mr-2 h-4 w-4" />
+                  View Day on Map
+                </Button>
+              </div>
             </div>
+            {expandedAddDay === day && (
+              <div className="rounded-lg border border-dashed border-blue-200 bg-blue-50/70 p-4">
+                <p className="text-sm font-medium text-slate-800">Choose destinations for Day {day}</p>
+                {availableDestinations.length === 0 ? (
+                  <p className="mt-3 text-sm text-slate-600">All destinations are already in your itinerary.</p>
+                ) : (
+                  <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    {availableDestinations.map((destination) => (
+                      <div
+                        key={`${day}-destination-${destination.id}`}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-white bg-white px-3 py-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-slate-900">{destination.name}</p>
+                          <p className="text-xs text-slate-600">{formatPeso(destination.estimatedCost)}</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setExpandedAddDay(null);
+                            onAddDestination({ ...destination, plannedDay: day });
+                          }}
+                        >
+                          Add to Day {day}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {daySegments.length > 0 && (
               <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Between destinations</p>

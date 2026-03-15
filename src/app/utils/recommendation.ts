@@ -227,7 +227,12 @@ export function calculateItinerarySchedule(
     }
   });
 
-  const rankedDestinations = [...selectedDestinations]
+  const fixedDestinations = selectedDestinations.filter((destination) => {
+    const day = destination.plannedDay;
+    return typeof day === 'number' && Number.isInteger(day) && day >= 1 && day <= totalDays;
+  });
+  const rankedDestinations = selectedDestinations
+    .filter((destination) => !fixedDestinations.includes(destination))
     .map((destination, originalIndex) => {
       const destinationInterests = getNormalizedInterests(destination.subInterests, destination.interests);
       let matchCount = 0;
@@ -263,8 +268,14 @@ export function calculateItinerarySchedule(
   // Distribute destinations across days using a duration-aware load model, then refine by proximity.
   const dayBuckets = Array.from({ length: totalDays }, () => [] as Destination[]);
   const dayHours = Array.from({ length: totalDays }, () => 0);
-  const totalRequestedHours = rankedDestinations.reduce(
-    (sum, item) => sum + getDestinationStayHours(item.destination),
+  fixedDestinations.forEach((destination) => {
+    const dayIndex = (destination.plannedDay as number) - 1;
+    dayBuckets[dayIndex].push(destination);
+    dayHours[dayIndex] += getDestinationStayHours(destination);
+  });
+
+  const totalRequestedHours = selectedDestinations.reduce(
+    (sum, destination) => sum + getDestinationStayHours(destination),
     0
   );
   const targetHoursPerDay = totalRequestedHours / totalDays;

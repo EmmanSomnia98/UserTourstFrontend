@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Destination } from '@/app/types/destination';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { Card } from '@/app/components/ui/card';
@@ -27,6 +27,7 @@ interface EditableItineraryViewProps {
   destinationRatings?: Record<string, number>;
   onBack: () => void;
   onUpdate: () => void;
+  onItineraryChange?: (savedItinerary: SavedItinerary) => void;
   onSaveChangesSuccess?: (savedItinerary: SavedItinerary) => void;
   onDeleteSuccess?: (itineraryId: string) => void;
 }
@@ -40,6 +41,7 @@ export function EditableItineraryView({
   destinationRatings,
   onBack,
   onUpdate,
+  onItineraryChange,
   onSaveChangesSuccess,
   onDeleteSuccess
 }: EditableItineraryViewProps) {
@@ -81,22 +83,48 @@ export function EditableItineraryView({
       const nextName = event.edit.name;
       const nextTripDays = event.edit.tripDays;
       const nextDestinationIds = event.edit.destinationIds;
+      const resolvedName = typeof nextName === 'string' && nextName.trim() ? nextName.trim() : itineraryName;
+      const resolvedTripDays =
+        typeof nextTripDays === 'number' && Number.isFinite(nextTripDays) && nextTripDays > 0
+          ? Math.round(nextTripDays)
+          : tripDays;
+      let resolvedDestinations = destinations;
+
       if (typeof nextName === 'string' && nextName.trim()) {
-        setItineraryName(nextName.trim());
+        setItineraryName(resolvedName);
       }
-      if (typeof nextTripDays === 'number' && Number.isFinite(nextTripDays) && nextTripDays > 0) {
-        setTripDays(Math.round(nextTripDays));
+      if (resolvedTripDays !== tripDays) {
+        setTripDays(resolvedTripDays);
       }
       if (Array.isArray(nextDestinationIds)) {
-        const mapped = nextDestinationIds
+        resolvedDestinations = nextDestinationIds
           .map((id) => destinationById.get(id))
           .filter((item): item is Destination => Boolean(item));
-        setDestinations(mapped);
+        setDestinations(resolvedDestinations);
       }
+
+      const nextTotalCost = resolvedDestinations.reduce((sum, dest) => sum + dest.estimatedCost, 0);
+      const nextTotalDuration = resolvedDestinations.reduce((sum, dest) => sum + getDestinationStayHours(dest), 0);
+
       setHasChanges(true);
       setLiveNotice(event.actorName ? `Updated by ${event.actorName}` : 'Itinerary updated by a collaborator.');
+      onItineraryChange?.({
+        ...savedItinerary,
+        name: resolvedName,
+        tripDays: resolvedTripDays,
+        destinations: resolvedDestinations,
+        totalCost: nextTotalCost,
+        totalDuration: nextTotalDuration,
+      });
     },
   });
+
+  useEffect(() => {
+    setDestinations(savedItinerary.destinations);
+    setTripDays(savedItinerary.tripDays);
+    setItineraryName(savedItinerary.name);
+    setHasChanges(false);
+  }, [savedItinerary]);
 
   const handleRemoveDestination = (destinationId: string) => {
     let removed = false;
@@ -174,6 +202,7 @@ export function EditableItineraryView({
 
       setHasChanges(false);
       setLiveNotice('Changes saved to the shared itinerary.');
+      onItineraryChange?.(updated);
       onSaveChangesSuccess?.(updated);
       onUpdate();
     } catch (error) {

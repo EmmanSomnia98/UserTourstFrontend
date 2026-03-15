@@ -514,6 +514,19 @@ export default function App() {
     setCurrentView('itinerary');
   };
 
+  const handleSharedItineraryChange = (savedItinerary: SavedItinerary) => {
+    setViewingSavedItinerary(savedItinerary);
+    setItinerary(savedItinerary.destinations);
+    setPreferences((prev) => ({
+      duration: savedItinerary.tripDays,
+      budget: savedItinerary.totalCost,
+      activityLevel: prev?.activityLevel ?? 'moderate',
+      interests: prev?.interests ?? [],
+      interestRanks: prev?.interestRanks,
+      subInterests: prev?.subInterests ?? [],
+    }));
+  };
+
   const handleEditSavedItinerary = (savedItinerary: SavedItinerary) => {
     hydrateSavedItineraryState(savedItinerary);
     setCurrentView('edit-saved');
@@ -1117,11 +1130,13 @@ export default function App() {
         {currentView === 'itinerary' && preferences && (
           <ItineraryView
             destinations={itinerary}
+            allDestinations={allDestinations}
             tripDays={preferences.duration}
             userInterests={preferences.interests}
             interestRanks={preferences.interestRanks}
             recommendationAlgorithm={lastRecommendationAlgorithm}
             recommendationBudget={lastRecommendationBudget}
+            onAddDestination={handleAddToItinerary}
             onRemoveDestination={handleRemoveFromItinerary}
             onReset={handleReset}
             onViewSavedItineraries={() => setCurrentView('saved-itineraries')}
@@ -1163,6 +1178,7 @@ export default function App() {
             onRateDestination={isAuthenticated ? handleRateDestination : undefined}
             destinationRatings={destinationRatings}
             onBack={() => setCurrentView('saved-itineraries')}
+            onItineraryChange={handleSharedItineraryChange}
             onSaveChangesSuccess={(savedItinerary) => {
               trackEvent('saved_itinerary_updated', {
                 itineraryId: savedItinerary.id,

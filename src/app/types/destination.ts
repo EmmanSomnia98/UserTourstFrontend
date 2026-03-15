@@ -25,6 +25,7 @@ export interface Destination {
     province?: string;
     fullAddress?: string;
   };
+  plannedDay?: number;
 }
 
 export interface UserPreferences {
