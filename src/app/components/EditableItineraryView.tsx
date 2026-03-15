@@ -11,9 +11,9 @@ import { DestinationLocationPanel } from '@/app/components/DestinationLocationPa
 import { DestinationImageGallery } from '@/app/components/DestinationImageGallery';
 import { Calendar, Trash2, Plus, Save, X, Edit2, Wallet, Star, Map as MapIcon } from 'lucide-react';
 import { calculateItinerarySchedule, getDestinationStayHours } from '@/app/utils/recommendation';
-import { createItinerary, deleteRemoteItinerary } from '@/app/api/itineraries';
+import { deleteRemoteItinerary, updateItinerary } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
-import { inviteCollaboratorToItinerary, pushItinerarySync } from '@/app/api/collaboration';
+import { inviteCollaboratorToItinerary } from '@/app/api/collaboration';
 import { useItineraryCollaboration } from '@/app/hooks/use-itinerary-collaboration';
 import { GeoPoint } from '@/app/utils/travel';
 import { buildGoogleMapsRouteUrl, getDaySegmentDistances } from '@/app/utils/google-maps';
@@ -151,7 +151,6 @@ export function EditableItineraryView({
   const handleSaveChanges = async () => {
     setSaveError(null);
     setIsSaving(true);
-    // Save new version first, then try to remove old version.
     try {
       const updatedItinerary: SavedItinerary = {
         ...savedItinerary,
@@ -162,38 +161,20 @@ export function EditableItineraryView({
         totalDuration,
       };
 
-      const created = await createItinerary(updatedItinerary);
-      if (!created) {
+      const updated = await updateItinerary(savedItinerary.id, updatedItinerary);
+      if (!updated) {
         setSaveError('Please sign in again to update this itinerary.');
         return;
       }
-      try {
-        await pushItinerarySync({
-          itineraryId: created.id,
-          name: created.name,
-          tripDays: created.tripDays,
-          destinationIds: created.destinations.map((item) => item.id),
-          sourceUserId: currentUserId,
-        });
-      } catch (syncError) {
-        console.warn('Collaboration sync failed:', syncError);
-      }
       publishEdit({
-        name: created.name,
-        tripDays: created.tripDays,
-        destinationIds: created.destinations.map((item) => item.id),
+        name: updated.name,
+        tripDays: updated.tripDays,
+        destinationIds: updated.destinations.map((item) => item.id),
       });
 
-      // Best-effort cleanup of the previous version.
-      if (savedItinerary.id && created.id !== savedItinerary.id) {
-        const removed = await deleteRemoteItinerary(savedItinerary.id);
-        if (!removed) {
-          setSaveError('Changes saved as a new itinerary, but we could not remove the old version.');
-        }
-      }
-
       setHasChanges(false);
-      onSaveChangesSuccess?.(created);
+      setLiveNotice('Changes saved to the shared itinerary.');
+      onSaveChangesSuccess?.(updated);
       onUpdate();
     } catch (error) {
       const message = error instanceof Error ? error.message : '';

@@ -164,6 +164,18 @@ export async function apiPost<T>(path: string, body: unknown, options: RequestIn
   });
 }
 
+export async function apiPatch<T>(path: string, body: unknown, options: RequestInit = {}): Promise<T> {
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  const headers = isFormData ? options.headers : { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  const payload = isFormData ? body : JSON.stringify(body);
+  return apiRequest<T>(path, {
+    ...options,
+    method: 'PATCH',
+    headers,
+    body: payload,
+  });
+}
+
 export async function apiDelete<T = void>(path: string, options: RequestInit = {}): Promise<T> {
   return apiRequest<T>(path, { ...options, method: 'DELETE' });
 }

@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, clearAuthSession, getAuthToken, resolveAssetUrl } from '@/app/api/client';
+import { apiDelete, apiGet, apiPatch, apiPost, clearAuthSession, getAuthToken, resolveAssetUrl } from '@/app/api/client';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { Destination } from '@/app/types/destination';
 
@@ -646,6 +646,55 @@ export async function createItinerary(itinerary: SavedItinerary): Promise<SavedI
     throw error;
   } finally {
     inFlightCreateByKey.delete(signature);
+  }
+}
+
+export async function updateItinerary(id: string, itinerary: SavedItinerary): Promise<SavedItinerary | null> {
+  const token = getAuthToken();
+  if (!token) return null;
+  if (!isSafeRemoteItineraryId(id)) {
+    throw new Error('Unable to update itinerary: invalid itinerary ID.');
+  }
+
+  const destinationIds = itinerary.destinations
+    .map((destination) => normalizeIdentifier(destination.id))
+    .filter((value): value is string => Boolean(value));
+
+  if (itinerary.destinations.length > 0 && destinationIds.length === 0) {
+    throw new Error('Unable to update itinerary: destination IDs are missing.');
+  }
+
+  const payload = {
+    name: itinerary.name,
+    tripDays: itinerary.tripDays,
+    days: itinerary.tripDays,
+    destinationIds,
+  };
+
+  try {
+    const response = await apiPatch<CreateItineraryResponse>(`/api/itineraries/${encodeURIComponent(id)}`, payload);
+    const updated = normalizeCreatedItinerary(response);
+    if (!updated) return null;
+    return mapBackendItinerary(updated, 0);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error ?? '');
+    const isAuthError =
+      message.includes('(401)') ||
+      message.includes('(403)') ||
+      message.toLowerCase().includes('unauthorized') ||
+      message.toLowerCase().includes('token') ||
+      message.toLowerCase().includes('jwt');
+
+    if (isAuthError) {
+      clearAuthSession();
+      return null;
+    }
+
+    if (message.includes('(404)') || message.includes('(405)')) {
+      throw new Error('This server does not support updating shared itineraries yet.');
+    }
+
+    throw error;
   }
 }
 
