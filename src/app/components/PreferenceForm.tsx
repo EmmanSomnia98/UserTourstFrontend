@@ -541,8 +541,8 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
                       )}
                     </button>
                     {isSelected && mainInterestRank !== null && (
-                      <div className="w-20 h-9 rounded-md bg-gray-100 text-gray-700 text-xs font-medium flex items-center justify-center">
-                        {`#${mainInterestRank}`}
+                      <div className="w-24 h-9 rounded-md bg-gray-100 text-gray-700 text-xs font-medium flex items-center justify-center">
+                        {`Rank ${mainInterestRank}`}
                       </div>
                     )}
                   </div>
