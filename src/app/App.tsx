@@ -31,6 +31,7 @@ import {
   DialogTitle,
 } from '@/app/components/ui/dialog';
 import { MapPin, Sparkles, BookOpen, LocateFixed } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
 import backgroundImage from '@/assets/bulusan-lake.jpg';
 
 type AppView =
@@ -46,6 +47,7 @@ type AppView =
 
 export default function App() {
   const isMobile = useIsMobile();
+  const prefersReducedMotion = useReducedMotion();
   const [currentView, setCurrentView] = useState<AppView>('welcome');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
@@ -71,6 +73,7 @@ export default function App() {
     'idle' | 'requesting' | 'granted' | 'denied' | 'unavailable' | 'error'
   >('idle');
   const showHeroGrid = allDestinations.length > 0;
+  const shouldAnimateMobileView = isMobile && !prefersReducedMotion;
   const feedbackIdentity = {
     userId: currentUser?.id,
     userEmail: currentUser?.email,
@@ -849,6 +852,12 @@ export default function App() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <motion.div
+          key={shouldAnimateMobileView ? currentView : 'desktop-view'}
+          initial={shouldAnimateMobileView ? { opacity: 0, y: 18, scale: 0.985 } : false}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={shouldAnimateMobileView ? { duration: 0.22, ease: 'easeOut' } : undefined}
+        >
         {currentView === 'welcome' && (
           <div className="text-center space-y-6 sm:space-y-8 py-8 sm:py-12">
             <div className="space-y-3 sm:space-y-4">
@@ -1173,6 +1182,7 @@ export default function App() {
             }}
           />
         )}
+        </motion.div>
       </main>
 
       {/* Footer */}
