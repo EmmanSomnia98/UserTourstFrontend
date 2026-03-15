@@ -121,19 +121,6 @@ export function DestinationCard({
           </div>
         )}
 
-        <div className="flex flex-wrap gap-1">
-          {destination.interests.slice(0, 3).map(interest => (
-            <span key={interest} className="text-xs px-2 py-1 bg-gray-100 rounded-full">
-              {interest}
-            </span>
-          ))}
-          {destination.interests.length > 3 && (
-            <span className="text-xs px-2 py-1 bg-gray-100 rounded-full">
-              +{destination.interests.length - 3} more
-            </span>
-          )}
-        </div>
-
         {(hasAddress || hasExactLocation) && (
           <div className="mt-auto rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
             <p className="text-xs font-medium text-slate-700">Location</p>
