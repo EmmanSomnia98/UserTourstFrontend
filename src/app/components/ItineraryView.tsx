@@ -15,6 +15,7 @@ import {
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { DestinationLocationPanel } from '@/app/components/DestinationLocationPanel';
 import { DestinationImageGallery } from '@/app/components/DestinationImageGallery';
+import { LocationScopeBadges } from '@/app/components/LocationScopeBadges';
 import { GeoPoint } from '@/app/utils/travel';
 import { Calendar, Trash2, Download, Share2, Wallet, Star, Map } from 'lucide-react';
 import { calculateItinerarySchedule, getDestinationStayHours } from '@/app/utils/recommendation';
@@ -478,7 +479,10 @@ export function ItineraryView({
                         />
                         <div className="flex-1 space-y-2">
                           <div>
-                            <h4 className="font-semibold">{dest.name}</h4>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="font-semibold">{dest.name}</h4>
+                              <LocationScopeBadges locationScope={dest.locationScope} />
+                            </div>
                             <p className="text-sm text-gray-600 line-clamp-2">{dest.description}</p>
                           </div>
                           
