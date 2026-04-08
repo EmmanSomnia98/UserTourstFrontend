@@ -432,7 +432,12 @@ function normalizeSubInterestLabel(mainInterestId: string, subInterestId: string
 }
 
 export async function fetchInterestsSchema(): Promise<InterestSchemaMainInterest[]> {
-  const payload = await apiGet<InterestsSchemaPayload>('/api/destinations/interests-schema');
+  const payload = await apiGet<InterestsSchemaPayload>('/api/destinations/interests-schema', {
+    headers: {
+      'Cache-Control': 'no-store',
+      Pragma: 'no-cache',
+    },
+  });
   const topLevelSubInterests = Array.isArray(payload?.subInterests) ? payload.subInterests : [];
   const subInterestsByMainInterestId = new Map<string, InterestSchemaSubInterest[]>();
   topLevelSubInterests.forEach((sub) => {

@@ -617,7 +617,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
               className="text-lg transition-colors hover:border-slate-400 focus-visible:ring-blue-200"
             />
             <p className="text-sm text-gray-600">
-              How many days will you be staying in Bulusan? (1-30 days)
+              How many days will you be staying in Bulusan?
             </p>
           </div>
         </div>
