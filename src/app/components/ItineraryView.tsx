@@ -481,7 +481,10 @@ export function ItineraryView({
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
                               <h4 className="font-semibold">{dest.name}</h4>
-                              <LocationScopeBadges locationScope={dest.locationScope} />
+                              <LocationScopeBadges
+                                locationScope={dest.locationScope}
+                                showNearestMatchBadge
+                              />
                             </div>
                             <p className="text-sm text-gray-600 line-clamp-2">{dest.description}</p>
                           </div>

@@ -149,6 +149,8 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
     if (normalized === 'IN_BULUSAN') return 'IN_BULUSAN';
     if (normalized === 'NEAR_BULUSAN') return 'NEAR_BULUSAN';
     if (normalized === 'SORSOGON') return 'SORSOGON';
+    if (normalized === 'BICOL_REGION') return 'BICOL_REGION';
+    if (normalized === 'OUTSIDE_BICOL') return 'OUTSIDE_BICOL';
     return undefined;
   };
 
