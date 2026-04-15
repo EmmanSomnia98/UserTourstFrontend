@@ -2,7 +2,6 @@ import { Destination } from '@/app/types/destination';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
-import { LocationScopeBadges } from '@/app/components/LocationScopeBadges';
 import { formatPeso } from '@/app/utils/currency';
 import { GeoPoint } from '@/app/utils/travel';
 import { Star, Clock, TrendingUp, MapPin, Plus, Check, Info } from 'lucide-react';
@@ -17,8 +16,6 @@ interface DestinationCardProps {
   onRateDestination?: (destination: Destination, rating: number) => void;
   userRating?: number;
   userLocation?: GeoPoint | null;
-  showLocationScopeBadge?: boolean;
-  locationScopeBadgeHiddenScopes?: Array<Exclude<Destination['locationScope'], undefined>>;
 }
 
 export function DestinationCard({
@@ -31,8 +28,6 @@ export function DestinationCard({
   onRateDestination,
   userRating = 0,
   userLocation,
-  showLocationScopeBadge = false,
-  locationScopeBadgeHiddenScopes = [],
 }: DestinationCardProps) {
   const hasExactLocation =
     Number.isFinite(destination.location?.lat) &&
@@ -85,13 +80,6 @@ export function DestinationCard({
           
           <p className="text-sm text-gray-600 line-clamp-2">{destination.description}</p>
         </div>
-
-        {showLocationScopeBadge && (
-          <LocationScopeBadges
-            locationScope={destination.locationScope}
-            hiddenScopes={locationScopeBadgeHiddenScopes}
-          />
-        )}
 
         <div className="flex items-center justify-between text-sm text-gray-600">
           <div className="flex items-center gap-1">

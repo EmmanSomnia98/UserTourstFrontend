@@ -4,7 +4,6 @@ export interface Destination {
   description: string;
   image: string;
   images?: string[];
-  locationScope?: 'IN_BULUSAN' | 'NEAR_BULUSAN' | 'SORSOGON' | 'BICOL_REGION' | 'OUTSIDE_BICOL';
   type: 'nature' | 'adventure' | 'cultural' | 'relaxation' | 'historical';
   difficulty: 'easy' | 'moderate' | 'challenging';
   duration: number; // in hours

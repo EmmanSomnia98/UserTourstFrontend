@@ -94,8 +94,6 @@ type RawDestination = Partial<Destination> & {
   photos?: string[] | Array<{ url?: string; secure_url?: string; path?: string }>;
   images?: string[] | Array<{ url?: string; secure_url?: string; path?: string }>;
   features?: Record<string, unknown>;
-  locationScope?: string;
-  location_scope?: string;
 };
 
 function extractDestinations(payload: DestinationPayload): Destination[] {
@@ -144,16 +142,6 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
     if (normalized === 'challenging') return 'challenging';
     return DIFFICULTY_FALLBACK;
   };
-  const normalizeLocationScope = (value: unknown): Destination['locationScope'] => {
-    const normalized = normalizeText(value).toUpperCase();
-    if (normalized === 'IN_BULUSAN') return 'IN_BULUSAN';
-    if (normalized === 'NEAR_BULUSAN') return 'NEAR_BULUSAN';
-    if (normalized === 'SORSOGON') return 'SORSOGON';
-    if (normalized === 'BICOL_REGION') return 'BICOL_REGION';
-    if (normalized === 'OUTSIDE_BICOL') return 'OUTSIDE_BICOL';
-    return undefined;
-  };
-
   const pickImageValues = (item: RawDestination): string[] => {
     const images: string[] = [];
     const seen = new Set<string>();
@@ -266,7 +254,6 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
       address: normalizeAddress(item),
       image: imageCandidates[0] ?? '',
       images: imageCandidates,
-      locationScope: normalizeLocationScope(item.locationScope ?? item.location_scope),
     } as Destination;
   });
 }

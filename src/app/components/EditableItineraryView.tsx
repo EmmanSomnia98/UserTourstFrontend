@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { DestinationLocationPanel } from '@/app/components/DestinationLocationPanel';
 import { DestinationImageGallery } from '@/app/components/DestinationImageGallery';
-import { LocationScopeBadges } from '@/app/components/LocationScopeBadges';
 import { Calendar, Trash2, Plus, Save, X, Edit2, Wallet, Star, Map as MapIcon } from 'lucide-react';
 import { calculateItinerarySchedule, getDestinationStayHours } from '@/app/utils/recommendation';
 import { deleteRemoteItinerary, updateItinerary } from '@/app/api/itineraries';
@@ -500,10 +499,6 @@ export function EditableItineraryView({
                             <div>
                               <div className="flex flex-wrap items-center gap-2">
                                 <h4 className="break-words font-semibold">{dest.name}</h4>
-                                <LocationScopeBadges
-                                  locationScope={dest.locationScope}
-                                  showNearestMatchBadge
-                                />
                               </div>
                               <p className="line-clamp-2 break-words text-sm text-gray-600">{dest.description}</p>
                             </div>

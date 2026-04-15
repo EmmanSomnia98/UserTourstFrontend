@@ -194,7 +194,6 @@ export function AllDestinationsView({
                 userLocation={userLocation}
                 userRating={destinationRatings?.[destination.id]}
                 onRateDestination={onRateDestination}
-                showLocationScopeBadge
               />
             </div>
           ))}

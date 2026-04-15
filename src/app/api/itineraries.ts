@@ -57,8 +57,6 @@ type BackendItineraryDestination = {
     photo?: string;
     photos?: string[] | Array<{ url?: string; secure_url?: string; path?: string }>;
     images?: string[] | Array<{ url?: string; secure_url?: string; path?: string }>;
-    locationScope?: string;
-    location_scope?: string;
   }) | string | number;
   destinationId?: unknown;
   cost?: number;
@@ -124,15 +122,6 @@ function toDestinationList(items: BackendItineraryDestination[] | undefined): De
       return normalized;
     }
     return 'easy';
-  };
-  const normalizeLocationScope = (value: unknown): Destination['locationScope'] => {
-    const normalized = normalizeText(value).toUpperCase();
-    if (normalized === 'IN_BULUSAN') return 'IN_BULUSAN';
-    if (normalized === 'NEAR_BULUSAN') return 'NEAR_BULUSAN';
-    if (normalized === 'SORSOGON') return 'SORSOGON';
-    if (normalized === 'BICOL_REGION') return 'BICOL_REGION';
-    if (normalized === 'OUTSIDE_BICOL') return 'OUTSIDE_BICOL';
-    return undefined;
   };
   const normalizeStringArray = (value: unknown): string[] => {
     if (!Array.isArray(value)) return [];
@@ -229,7 +218,6 @@ function toDestinationList(items: BackendItineraryDestination[] | undefined): De
         estimatedCost,
         location,
         address,
-        locationScope: normalizeLocationScope(destination?.locationScope ?? destination?.location_scope),
       } as Destination;
     })
     .filter((dest): dest is Destination => Boolean(dest));
