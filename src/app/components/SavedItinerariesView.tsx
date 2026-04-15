@@ -4,7 +4,7 @@ import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
-import { Calendar, MapPin, Trash2, Edit, DollarSign, Eye } from 'lucide-react';
+import { MapPin, Trash2, Edit, DollarSign, Eye, Clock3 } from 'lucide-react';
 import { deleteRemoteItinerary, fetchItineraries } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
 
@@ -81,6 +81,21 @@ export function SavedItinerariesView({
       month: 'short', 
       day: 'numeric' 
     });
+  };
+
+  const formatHours = (value: number) => {
+    const rounded = Math.round(value * 10) / 10;
+    return Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(1);
+  };
+
+  const getDestinationDurationHours = (destination: SavedItinerary['destinations'][number]) => {
+    if (Number.isFinite(destination.durationHours) && (destination.durationHours as number) > 0) {
+      return destination.durationHours as number;
+    }
+    if (Number.isFinite(destination.duration) && destination.duration > 0) {
+      return destination.duration;
+    }
+    return null;
   };
 
   return (
@@ -174,6 +189,10 @@ export function SavedItinerariesView({
                     <span>{itinerary.destinations.length} destinations</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Clock3 className="w-4 h-4" />
+                    <span>{formatHours(itinerary.totalDuration)}h total duration</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
                     <DollarSign className="w-4 h-4" />
                     <span>{formatPeso(itinerary.totalCost)} total cost</span>
                   </div>
@@ -190,6 +209,7 @@ export function SavedItinerariesView({
                         className="text-xs transition-colors duration-200 hover:bg-slate-100"
                       >
                         {dest.name}
+                        {getDestinationDurationHours(dest) !== null ? ` - ${formatHours(getDestinationDurationHours(dest) as number)}h` : ''}
                       </Badge>
                     ))}
                     {itinerary.destinations.length > 3 && (

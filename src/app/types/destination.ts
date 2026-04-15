@@ -7,6 +7,7 @@ export interface Destination {
   type: 'nature' | 'adventure' | 'cultural' | 'relaxation' | 'historical';
   difficulty: 'easy' | 'moderate' | 'challenging';
   duration: number; // in hours
+  durationHours?: number;
   rating: number;
   reviewCount: number;
   interests: string[];

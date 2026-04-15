@@ -30,7 +30,11 @@ function hasValidLocation(destination: Destination): boolean {
 }
 
 export function getDestinationStayHours(destination: Destination): number {
-  const parsedDuration = Number.isFinite(destination.duration) ? destination.duration : 0;
+  const parsedDuration = Number.isFinite(destination.durationHours)
+    ? (destination.durationHours as number)
+    : Number.isFinite(destination.duration)
+      ? destination.duration
+      : 0;
   if (parsedDuration > 0) {
     return Math.min(12, Math.max(0.5, parsedDuration));
   }

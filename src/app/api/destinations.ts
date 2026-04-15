@@ -236,11 +236,14 @@ function normalizeDestinations(items: RawDestination[]): Destination[] {
 
     const imageCandidates = pickImageValues(item).map((value) => resolveAssetUrl(value)).filter(Boolean);
 
+    const normalizedDuration = normalizeDuration(item);
+
     return {
       id: String(item.id ?? item._id ?? item.destinationId ?? fallbackId),
       name,
       description,
-      duration: normalizeDuration(item),
+      duration: normalizedDuration,
+      durationHours: normalizedDuration,
       type: normalizeType(item.type ?? item.destinationType ?? item.destination_type ?? item.category ?? item.activityType ?? item.activity_type),
       difficulty: normalizeDifficulty(item.difficulty ?? item.level ?? item.activityLevel ?? item.activity_level),
       rating,
@@ -412,7 +415,7 @@ function normalizeSubInterestLabel(mainInterestId: string, subInterestId: string
     if (subId === 'heritage_tours') return 'Heritage Tours';
     if (subId === 'food_tourism') return 'Food Tourism';
     if (subId === 'festivals_events') return 'Festival & Events';
-    if (subId === 'culinary_tourism') return 'Arts & Crafts';
+    if (subId === 'culinary_tourism') return 'Culinary Tourism';
   }
 
   return fallbackLabel;
@@ -486,12 +489,17 @@ export async function fetchInterestsSchema(): Promise<InterestSchemaMainInterest
         : Array.isArray(subInterestsLegacyCandidate)
           ? subInterestsLegacyCandidate
           : subInterestsByMainInterestId.get(id) ?? [];
+      const seenSubLabels = new Set<string>();
       const subInterests = rawSubs
         .map((sub) => {
           if (typeof sub === 'string') {
             const subId = normalizeSchemaId(sub);
             if (!subId) return null;
-            return { id: subId, label: humanizeInterestId(subId) };
+            const subLabel = normalizeSubInterestLabel(id, subId, humanizeInterestId(subId));
+            const subLabelKey = subLabel.trim().toLowerCase();
+            if (!subLabelKey || seenSubLabels.has(subLabelKey)) return null;
+            seenSubLabels.add(subLabelKey);
+            return { id: subId, label: subLabel };
           }
           const subEntry = sub as Record<string, unknown>;
           const subId = normalizeSchemaId(subEntry.id);
@@ -499,7 +507,10 @@ export async function fetchInterestsSchema(): Promise<InterestSchemaMainInterest
             normalizeSchemaLabel(subEntry.label) ||
             (subId ? humanizeInterestId(subId) : '');
           const subLabel = normalizeSubInterestLabel(id, subId, rawSubLabel);
+          const subLabelKey = subLabel.trim().toLowerCase();
           if (!subId) return null;
+          if (!subLabelKey || seenSubLabels.has(subLabelKey)) return null;
+          seenSubLabels.add(subLabelKey);
           return { id: subId, label: subLabel };
         })
         .filter((entry): entry is InterestSchemaSubInterest => Boolean(entry));

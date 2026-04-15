@@ -16,7 +16,7 @@ import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { DestinationLocationPanel } from '@/app/components/DestinationLocationPanel';
 import { DestinationImageGallery } from '@/app/components/DestinationImageGallery';
 import { GeoPoint } from '@/app/utils/travel';
-import { Calendar, Trash2, Download, Share2, Wallet, Star, Map } from 'lucide-react';
+import { Calendar, Trash2, Download, Share2, Wallet, Star, Map, Clock3 } from 'lucide-react';
 import { calculateItinerarySchedule, getDestinationStayHours } from '@/app/utils/recommendation';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { createItinerary } from '@/app/api/itineraries';
@@ -71,6 +71,15 @@ export function ItineraryView({
   const formatHours = (value: number) => {
     const rounded = Math.round(value * 10) / 10;
     return Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(1);
+  };
+  const getDestinationDurationHours = (destination: Destination) => {
+    if (Number.isFinite(destination.durationHours) && (destination.durationHours as number) > 0) {
+      return destination.durationHours as number;
+    }
+    if (Number.isFinite(destination.duration) && destination.duration > 0) {
+      return destination.duration;
+    }
+    return null;
   };
   const schedule = calculateItinerarySchedule(destinations, tripDays, userInterests, interestRanks);
   const emptyDays = Array.from(schedule.entries()).filter(([, dayDestinations]) => dayDestinations.length === 0).length;
@@ -489,6 +498,12 @@ export function ItineraryView({
                               <Wallet className="w-4 h-4" />
                               <span>{formatPeso(dest.estimatedCost)}</span>
                             </div>
+                            <div className="flex items-center gap-1">
+                              <Clock3 className="w-4 h-4" />
+                              <span>
+                                Average Visit Time: {getDestinationDurationHours(dest) !== null ? `${formatHours(getDestinationDurationHours(dest) as number)}h` : 'N/A'}
+                              </span>
+                            </div>
                           </div>
                           <div className="pt-1">
                             <TravelModeBadges destination={dest} origin={userLocation} />
@@ -689,6 +704,12 @@ export function ItineraryView({
                   <span className="inline-flex items-center gap-1">
                     <Wallet className="w-4 h-4" />
                     {formatPeso(selectedDestination.estimatedCost)}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Clock3 className="w-4 h-4" />
+                    {getDestinationDurationHours(selectedDestination) !== null
+                      ? `Average Visit Time: ${formatHours(getDestinationDurationHours(selectedDestination) as number)}h`
+                      : 'Average Visit Time: N/A'}
                   </span>
                 </div>
                 <TravelModeBadges destination={selectedDestination} origin={userLocation} />

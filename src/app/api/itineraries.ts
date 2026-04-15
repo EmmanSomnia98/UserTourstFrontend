@@ -209,6 +209,7 @@ function toDestinationList(items: BackendItineraryDestination[] | undefined): De
         type: normalizeDestinationType(destination?.type),
         difficulty: normalizeDifficulty(destination?.difficulty),
         duration,
+        durationHours: duration,
         rating: toNumber(destination?.rating) ?? 0,
         reviewCount: Math.max(0, Math.round(toNumber(destination?.reviewCount) ?? 0)),
         interests: normalizeStringArray(destination?.interests),
@@ -579,12 +580,16 @@ export async function createItinerary(itinerary: SavedItinerary): Promise<SavedI
     .map((destination) => {
       const destinationId = normalizeIdentifier(destination.id);
       if (!destinationId) return null;
+      const durationHours =
+        (typeof destination.durationHours === 'number' && Number.isFinite(destination.durationHours) && destination.durationHours > 0
+          ? destination.durationHours
+          : destination.duration);
       return {
         destination: destinationId,
         destinationId,
         cost: destination.estimatedCost,
-        duration: destination.duration,
-        durationHours: destination.duration,
+        duration: durationHours,
+        durationHours,
       };
     })
     .filter((value): value is NonNullable<typeof value> => Boolean(value));
