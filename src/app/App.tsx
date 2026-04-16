@@ -674,6 +674,14 @@ export default function App() {
           <Button
             variant="outline"
             className={mobileActionButtonClass}
+            onClick={() => handleMobileNavigate('preferences')}
+          >
+            <Sparkles className="mr-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+            <span className="transition-transform duration-300 group-hover:translate-x-0.5">Create Itinerary</span>
+          </Button>
+          <Button
+            variant="outline"
+            className={mobileActionButtonClass}
             onClick={() => handleMobileNavigate('saved-itineraries')}
           >
             <BookOpen className="mr-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
@@ -718,7 +726,7 @@ export default function App() {
   return (
     <div className="min-h-screen relative overflow-hidden bg-slate-50">
       <div
-        className="absolute inset-0 bg-cover bg-center blur-0-px scale-105"
+        className="fixed inset-0 bg-cover bg-center bg-no-repeat blur-0-px scale-105"
         style={{ backgroundImage: `url(${backgroundImage})` }}
         aria-hidden="true"
       />
