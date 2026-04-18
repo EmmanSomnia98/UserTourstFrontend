@@ -16,13 +16,14 @@ import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { DestinationLocationPanel } from '@/app/components/DestinationLocationPanel';
 import { DestinationImageGallery } from '@/app/components/DestinationImageGallery';
 import { GeoPoint } from '@/app/utils/travel';
-import { Calendar, Trash2, Download, Wallet, Star, Map, Clock3 } from 'lucide-react';
+import { Calendar, Trash2, Download, Wallet, Star, Map as MapIcon, Clock3 } from 'lucide-react';
 import { calculateItinerarySchedule, getDestinationStayHours } from '@/app/utils/recommendation';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { createItinerary } from '@/app/api/itineraries';
 import type { RecommendationBudgetSummary } from '@/app/api/recommendations';
 import { formatPeso } from '@/app/utils/currency';
 import { buildGoogleMapsRouteUrl, getDaySegmentDistances } from '@/app/utils/google-maps';
+import type { PDFImage } from 'pdf-lib';
 
 interface ItineraryViewProps {
   destinations: Destination[];
@@ -198,75 +199,406 @@ export function ItineraryView({
     }
   };
 
-  const handleDownload = () => {
-    const toAscii = (value: string) => value.replace(/[^\x20-\x7E]/g, '');
-    const escapePdfText = (value: string) =>
-      value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-    const makePdfBlob = (lines: string[]): Blob => {
-      const lineHeight = 14;
-      const startY = 800;
-      const safeLines = lines.map((line) => toAscii(line));
-      const content = [
-        'BT',
-        '/F1 12 Tf',
-        `1 0 0 1 50 ${startY} Tm`,
-        `${lineHeight} TL`,
-        ...safeLines.map((line, index) =>
-          index === 0 ? `(${escapePdfText(line)}) Tj` : `T* (${escapePdfText(line)}) Tj`
-        ),
-        'ET',
-      ].join('\n');
+  const handleDownload = async () => {
+    try {
+      const formatPdfMoney = (value: number) =>
+        `PHP ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+      const pdfDoc = await PDFDocument.create();
+      const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const pageWidth = 595.28;
+      const pageHeight = 841.89;
+      const marginX = 42;
+      const topMargin = 52;
+      const bottomMargin = 56;
+      const contentWidth = pageWidth - marginX * 2;
+      const imageCache = new Map<string, PDFImage | null>();
+      const footerColor = rgb(0.46, 0.53, 0.62);
 
-      const objects = [
-        '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
-        '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n',
-        '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n',
-        `4 0 obj\n<< /Length ${content.length} >>\nstream\n${content}\nendstream\nendobj\n`,
-        '5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n',
-      ];
-
-      let pdf = '%PDF-1.4\n';
-      const offsets: number[] = [0];
-      objects.forEach((obj) => {
-        offsets.push(pdf.length);
-        pdf += obj;
-      });
-      const xrefStart = pdf.length;
-      pdf += `xref\n0 ${objects.length + 1}\n`;
-      pdf += '0000000000 65535 f \n';
-      for (let i = 1; i <= objects.length; i += 1) {
-        pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
-      }
-      pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
-      return new Blob([pdf], { type: 'application/pdf' });
-    };
-
-    const lines: string[] = [];
-    lines.push('Bulusan Travel Itinerary');
-    lines.push('');
-    lines.push(`Total Duration: ${tripDays} days`);
-    lines.push(`Total Cost: ${formatPeso(totalCost)}`);
-    lines.push(`Total Activity Hours: ${formatHours(totalDuration)}h`);
-    lines.push('');
-    schedule.forEach((dayDestinations, day) => {
-      lines.push(`Day ${day}:`);
-      if (dayDestinations.length === 0) {
-        lines.push('  - No activities scheduled');
-      } else {
-        dayDestinations.forEach((dest) => {
-          lines.push(`  - ${dest.name} (${formatPeso(dest.estimatedCost)})`);
+      const wrapText = (text: string, maxWidth: number, fontSize: number, bold = false): string[] => {
+        const source = text.trim();
+        if (!source) return [];
+        const words = source.split(/\s+/);
+        const font = bold ? fontBold : fontRegular;
+        const lines: string[] = [];
+        let current = '';
+        words.forEach((word) => {
+          const candidate = current ? `${current} ${word}` : word;
+          if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
+            current = candidate;
+            return;
+          }
+          if (current) lines.push(current);
+          current = word;
         });
-      }
-      lines.push('');
-    });
+        if (current) lines.push(current);
+        return lines;
+      };
 
-    const blob = makePdfBlob(lines);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'bulusan-itinerary.pdf';
-    a.click();
-    URL.revokeObjectURL(url);
+      const loadImage = async (url?: string): Promise<PDFImage | null> => {
+        if (!url) return null;
+        if (imageCache.has(url)) return imageCache.get(url) ?? null;
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`);
+          const bytes = await response.arrayBuffer();
+          let image: PDFImage;
+          try {
+            image = await pdfDoc.embedJpg(bytes);
+          } catch {
+            image = await pdfDoc.embedPng(bytes);
+          }
+          imageCache.set(url, image);
+          return image;
+        } catch {
+          imageCache.set(url, null);
+          return null;
+        }
+      };
+
+      await Promise.all(
+        Array.from(new Set(destinations.map((destination) => destination.image).filter(Boolean))).map((url) =>
+          loadImage(url)
+        )
+      );
+
+      const drawFooter = (pageNumber: number, totalPages: number) => {
+        const page = pdfDoc.getPages()[pageNumber - 1];
+        page.drawLine({
+          start: { x: marginX, y: 36 },
+          end: { x: pageWidth - marginX, y: 36 },
+          thickness: 0.6,
+          color: rgb(0.84, 0.88, 0.93),
+        });
+        page.drawText(`Page ${pageNumber} of ${totalPages}`, {
+          x: pageWidth - marginX - 72,
+          y: 22,
+          size: 9,
+          color: footerColor,
+          font: fontRegular,
+        });
+      };
+
+      const coverPage = pdfDoc.addPage([pageWidth, pageHeight]);
+      coverPage.drawRectangle({ x: 0, y: 0, width: pageWidth, height: pageHeight, color: rgb(0.97, 0.98, 1) });
+      coverPage.drawRectangle({ x: 0, y: pageHeight - 238, width: pageWidth, height: 238, color: rgb(0.13, 0.34, 0.63) });
+      coverPage.drawText('Bulusan Travel Itinerary', {
+        x: marginX,
+        y: pageHeight - 112,
+        size: 33,
+        font: fontBold,
+        color: rgb(1, 1, 1),
+      });
+      const generatedAt = new Date().toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+      coverPage.drawText(`Generated ${generatedAt}`, {
+        x: marginX,
+        y: pageHeight - 142,
+        size: 11,
+        font: fontRegular,
+        color: rgb(0.87, 0.93, 1),
+      });
+
+      const coverCards = [
+        { label: 'Trip Days', value: `${tripDays}` },
+        { label: 'Destinations', value: `${destinations.length}` },
+        { label: 'Estimated Cost', value: formatPdfMoney(totalCost) },
+      ];
+      const cardGap = 14;
+      const cardWidth = (contentWidth - cardGap * 2) / 3;
+      const cardsTopY = pageHeight - 332;
+      coverCards.forEach((card, index) => {
+        const x = marginX + index * (cardWidth + cardGap);
+        coverPage.drawRectangle({
+          x,
+          y: cardsTopY - 78,
+          width: cardWidth,
+          height: 78,
+          borderWidth: 1,
+          borderColor: rgb(0.76, 0.84, 0.92),
+          color: rgb(1, 1, 1),
+        });
+        coverPage.drawText(card.label, {
+          x: x + 12,
+          y: cardsTopY - 28,
+          size: 10,
+          font: fontRegular,
+          color: rgb(0.4, 0.46, 0.54),
+        });
+        coverPage.drawText(card.value, {
+          x: x + 12,
+          y: cardsTopY - 52,
+          size: 15,
+          font: fontBold,
+          color: rgb(0.11, 0.17, 0.27),
+        });
+      });
+
+      const coverImageTopY = pageHeight - 432;
+      const coverImageHeight = 220;
+      const coverDestinations = destinations.slice(0, 3);
+      if (coverDestinations.length > 0) {
+        const coverImageWidth = (contentWidth - cardGap * Math.max(coverDestinations.length - 1, 0)) / coverDestinations.length;
+        for (let index = 0; index < coverDestinations.length; index += 1) {
+          const destination = coverDestinations[index];
+          const x = marginX + index * (coverImageWidth + cardGap);
+          coverPage.drawRectangle({
+            x,
+            y: coverImageTopY - coverImageHeight,
+            width: coverImageWidth,
+            height: coverImageHeight,
+            color: rgb(0.91, 0.95, 0.99),
+            borderWidth: 1,
+            borderColor: rgb(0.76, 0.84, 0.92),
+          });
+          const image = await loadImage(destination.image);
+          if (image) {
+            const scale = Math.min(coverImageWidth / image.width, coverImageHeight / image.height);
+            const drawWidth = image.width * scale;
+            const drawHeight = image.height * scale;
+            coverPage.drawImage(image, {
+              x: x + (coverImageWidth - drawWidth) / 2,
+              y: coverImageTopY - coverImageHeight + (coverImageHeight - drawHeight) / 2,
+              width: drawWidth,
+              height: drawHeight,
+            });
+          } else {
+            coverPage.drawText(destination.name.slice(0, 1).toUpperCase(), {
+              x: x + coverImageWidth / 2 - 6,
+              y: coverImageTopY - coverImageHeight / 2 - 6,
+              size: 24,
+              font: fontBold,
+              color: rgb(0.43, 0.5, 0.62),
+            });
+          }
+          const nameLines = wrapText(destination.name, coverImageWidth - 16, 10, true).slice(0, 2);
+          nameLines.forEach((line, lineIndex) => {
+            coverPage.drawText(line, {
+              x: x + 8,
+              y: coverImageTopY - coverImageHeight - 18 - lineIndex * 12,
+              size: 10,
+              font: fontBold,
+              color: rgb(0.18, 0.25, 0.35),
+            });
+          });
+        }
+      }
+
+      let page = pdfDoc.addPage([pageWidth, pageHeight]);
+      let cursorY = pageHeight - topMargin;
+      const ensureSpace = (height: number) => {
+        if (cursorY - height < bottomMargin) {
+          page = pdfDoc.addPage([pageWidth, pageHeight]);
+          cursorY = pageHeight - topMargin;
+        }
+      };
+      const drawHeading = (title: string, subtitle?: string) => {
+        page.drawText(title, {
+          x: marginX,
+          y: cursorY,
+          size: 18,
+          font: fontBold,
+          color: rgb(0.08, 0.15, 0.25),
+        });
+        cursorY -= 24;
+        if (subtitle) {
+          page.drawText(subtitle, {
+            x: marginX,
+            y: cursorY,
+            size: 10,
+            font: fontRegular,
+            color: rgb(0.42, 0.48, 0.56),
+          });
+          cursorY -= 18;
+        }
+      };
+
+      drawHeading('Daily Itinerary', `${destinations.length} destinations across ${tripDays} day${tripDays === 1 ? '' : 's'}`);
+      ensureSpace(82);
+
+      const summaryCards = [
+        { label: 'Trip Days', value: `${tripDays}` },
+        { label: 'Total Cost', value: formatPdfMoney(totalCost) },
+        { label: 'Activity Hours', value: `${formatHours(totalDuration)}h` },
+      ];
+      const summaryGap = 12;
+      const summaryWidth = (contentWidth - summaryGap * 2) / 3;
+      const summaryTop = cursorY;
+      summaryCards.forEach((card, index) => {
+        const x = marginX + index * (summaryWidth + summaryGap);
+        page.drawRectangle({
+          x,
+          y: summaryTop - 64,
+          width: summaryWidth,
+          height: 64,
+          borderWidth: 1,
+          borderColor: rgb(0.86, 0.9, 0.95),
+          color: rgb(0.99, 0.99, 1),
+        });
+        page.drawText(card.label, {
+          x: x + 10,
+          y: summaryTop - 24,
+          size: 9,
+          font: fontRegular,
+          color: rgb(0.42, 0.48, 0.56),
+        });
+        page.drawText(card.value, {
+          x: x + 10,
+          y: summaryTop - 46,
+          size: 12,
+          font: fontBold,
+          color: rgb(0.12, 0.18, 0.28),
+        });
+      });
+      cursorY -= 86;
+
+      schedule.forEach((dayDestinations, day) => {
+        ensureSpace(46);
+        page.drawRectangle({
+          x: marginX,
+          y: cursorY - 28,
+          width: contentWidth,
+          height: 28,
+          color: rgb(0.94, 0.96, 0.99),
+          borderWidth: 1,
+          borderColor: rgb(0.86, 0.9, 0.95),
+        });
+        page.drawText(`Day ${day}`, {
+          x: marginX + 10,
+          y: cursorY - 18,
+          size: 12,
+          font: fontBold,
+          color: rgb(0.12, 0.18, 0.28),
+        });
+        page.drawText(`${dayDestinations.length} ${dayDestinations.length === 1 ? 'stop' : 'stops'}`, {
+          x: marginX + 72,
+          y: cursorY - 18,
+          size: 9,
+          font: fontRegular,
+          color: rgb(0.42, 0.48, 0.56),
+        });
+        cursorY -= 38;
+
+        if (dayDestinations.length === 0) {
+          ensureSpace(24);
+          page.drawText('No activities scheduled for this day.', {
+            x: marginX + 8,
+            y: cursorY - 12,
+            size: 10,
+            font: fontRegular,
+            color: rgb(0.46, 0.52, 0.61),
+          });
+          cursorY -= 28;
+          return;
+        }
+
+        dayDestinations.forEach((destination, stopIndex) => {
+          const durationHours = getDestinationDurationHours(destination);
+          const details = [formatPdfMoney(destination.estimatedCost)];
+          if (durationHours !== null) details.push(`${formatHours(durationHours)}h`);
+          const address =
+            destination.address?.fullAddress ||
+            [destination.address?.barangay, destination.address?.city, destination.address?.province].filter(Boolean).join(', ');
+          const thumbWidth = 84;
+          const thumbHeight = 62;
+          const textStartX = marginX + 12 + thumbWidth + 12;
+          const textMaxWidth = contentWidth - (textStartX - marginX) - 16;
+          const titleLines = wrapText(`${stopIndex + 1}. ${destination.name}`, textMaxWidth, 11, true);
+          const addressLines = address ? wrapText(address, textMaxWidth, 9, false).slice(0, 2) : [];
+          const bodyLineCount = titleLines.length + (addressLines.length > 0 ? addressLines.length : 0) + 1;
+          const itemHeight = Math.max(78, 18 + bodyLineCount * 12);
+
+          ensureSpace(itemHeight + 10);
+          const itemTopY = cursorY;
+          page.drawRectangle({
+            x: marginX + 4,
+            y: itemTopY - itemHeight,
+            width: contentWidth - 8,
+            height: itemHeight,
+            borderWidth: 1,
+            borderColor: rgb(0.9, 0.92, 0.96),
+            color: rgb(1, 1, 1),
+          });
+
+          page.drawRectangle({
+            x: marginX + 12,
+            y: itemTopY - 8 - thumbHeight,
+            width: thumbWidth,
+            height: thumbHeight,
+            color: rgb(0.93, 0.96, 0.99),
+            borderWidth: 1,
+            borderColor: rgb(0.83, 0.88, 0.94),
+          });
+          const image = imageCache.get(destination.image) ?? null;
+          if (image) {
+            const scale = Math.min(thumbWidth / image.width, thumbHeight / image.height);
+            const drawWidth = image.width * scale;
+            const drawHeight = image.height * scale;
+            page.drawImage(image, {
+              x: marginX + 12 + (thumbWidth - drawWidth) / 2,
+              y: itemTopY - 8 - thumbHeight + (thumbHeight - drawHeight) / 2,
+              width: drawWidth,
+              height: drawHeight,
+            });
+          }
+
+          let textY = itemTopY - 20;
+          titleLines.forEach((line) => {
+            page.drawText(line, {
+              x: textStartX,
+              y: textY,
+              size: 11,
+              font: fontBold,
+              color: rgb(0.11, 0.17, 0.27),
+            });
+            textY -= 12;
+          });
+          page.drawText(details.join(' | '), {
+            x: textStartX,
+            y: textY - 2,
+            size: 9,
+            font: fontRegular,
+            color: rgb(0.38, 0.45, 0.54),
+          });
+          textY -= 14;
+          addressLines.forEach((line) => {
+            page.drawText(line, {
+              x: textStartX,
+              y: textY,
+              size: 9,
+              font: fontRegular,
+              color: rgb(0.45, 0.5, 0.59),
+            });
+            textY -= 11;
+          });
+
+          cursorY -= itemHeight + 10;
+        });
+      });
+
+      const pages = pdfDoc.getPages();
+      pages.forEach((_, index) => {
+        drawFooter(index + 1, pages.length);
+      });
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'bulusan-itinerary.pdf';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to generate itinerary PDF:', error);
+      window.alert('Could not generate the PDF right now. Please try again.');
+    }
   };
 
   const formatDescriptionLines = (description: string): string[] => {
@@ -384,7 +716,7 @@ export function ItineraryView({
                     window.open(dayRouteUrl, '_blank', 'noopener,noreferrer');
                   }}
                 >
-                  <Map className="mr-2 h-4 w-4" />
+                  <MapIcon className="mr-2 h-4 w-4" />
                   View Day on Map
                 </Button>
               </div>
