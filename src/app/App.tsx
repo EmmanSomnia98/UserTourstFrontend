@@ -52,6 +52,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+  const [authSuccessMessage, setAuthSuccessMessage] = useState<string | null>(null);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [recommendations, setRecommendations] = useState<Destination[]>([]);
   const [itinerary, setItinerary] = useState<Destination[]>([]);
@@ -135,6 +136,16 @@ export default function App() {
   useEffect(() => {
     void flushFeedbackQueue();
   }, [currentUser?.id, currentUser?.email]);
+
+  useEffect(() => {
+    if (currentView !== 'preferences' || !authSuccessMessage) return;
+    const timer = window.setTimeout(() => {
+      setAuthSuccessMessage(null);
+    }, 4000);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [currentView, authSuccessMessage]);
 
   useEffect(() => {
     if (allDestinations.length === 0) {
@@ -1115,6 +1126,7 @@ export default function App() {
                 const hasToken = Boolean(session.token);
                 setIsAuthenticated(hasToken);
                 setCurrentUser(hasToken ? (session.user ?? null) : null);
+                setAuthSuccessMessage("Signed in successfully. Let's set your travel preferences.");
                 setCurrentView('preferences');
               }}
               onBack={() => setCurrentView('welcome')}
@@ -1130,6 +1142,7 @@ export default function App() {
                 const user = session.user ?? getAuthUser<AuthUser>();
                 setIsAuthenticated(Boolean(token));
                 setCurrentUser(user ?? null);
+                setAuthSuccessMessage("Account created successfully. Let's set your travel preferences.");
                 setCurrentView('preferences');
               }}
               onBack={() => setCurrentView('welcome')}
@@ -1138,7 +1151,22 @@ export default function App() {
         )}
 
         {currentView === 'preferences' && (
-          <div className="py-8">
+          <div className="py-8 space-y-4">
+            {authSuccessMessage && (
+              <div className="mx-auto w-full max-w-3xl rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                <div className="flex items-center justify-between gap-3">
+                  <span>{authSuccessMessage}</span>
+                  <button
+                    type="button"
+                    className="shrink-0 font-semibold text-emerald-900 transition hover:text-emerald-700"
+                    onClick={() => setAuthSuccessMessage(null)}
+                    aria-label="Dismiss success message"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
             <PreferenceForm onSubmit={handlePreferencesSubmit} onLocationChange={setUserLocation} />
           </div>
         )}
