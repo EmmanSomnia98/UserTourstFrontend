@@ -363,18 +363,57 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
       return;
     }
 
+    const applyPosition = (position: GeolocationPosition) => {
+      const nextLocation = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      };
+      onLocationChange?.(nextLocation);
+      setLocationStatus('granted');
+      setLocationMessage('Location access enabled. Travel times will use your current location.');
+    };
+
+    const handleTerminalLocationError = (error: GeolocationPositionError) => {
+      if (error.code === error.PERMISSION_DENIED) {
+        setLocationStatus('denied');
+        setLocationMessage('Location access was denied. You can enable it and try again.');
+        onLocationChange?.(null);
+        return;
+      }
+      if (error.code === error.TIMEOUT) {
+        setLocationStatus('error');
+        setLocationMessage('Location request timed out. Move to an open area and try again.');
+        onLocationChange?.(null);
+        return;
+      }
+      if (error.code === error.POSITION_UNAVAILABLE) {
+        setLocationStatus('error');
+        setLocationMessage('Location is currently unavailable on this device. Please try again.');
+        onLocationChange?.(null);
+        return;
+      }
+      setLocationStatus('error');
+      setLocationMessage('Could not get your location. Please try again.');
+      onLocationChange?.(null);
+    };
+
+    const requestHighAccuracyRetry = () => {
+      setLocationMessage('Coarse location failed. Retrying with GPS accuracy...');
+      navigator.geolocation.getCurrentPosition(
+        applyPosition,
+        handleTerminalLocationError,
+        {
+          enableHighAccuracy: true,
+          timeout: 30_000,
+          maximumAge: 0,
+        }
+      );
+    };
+
     setLocationStatus('requesting');
     setLocationMessage('Requesting location access...');
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const nextLocation = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
-        onLocationChange?.(nextLocation);
-        setLocationStatus('granted');
-        setLocationMessage('Location access enabled. Travel times will use your current location.');
-      },
+      applyPosition,
       (error) => {
         if (error.code === error.PERMISSION_DENIED) {
           setLocationStatus('denied');
@@ -382,13 +421,12 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
           onLocationChange?.(null);
           return;
         }
-        setLocationStatus('error');
-        setLocationMessage('Could not get your location. Please try again.');
+        requestHighAccuracyRetry();
       },
       {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 300000,
+        enableHighAccuracy: false,
+        timeout: 20_000,
+        maximumAge: 600_000,
       }
     );
   };

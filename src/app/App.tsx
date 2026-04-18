@@ -559,27 +559,51 @@ export default function App() {
       return;
     }
 
+    const applyPosition = (position: GeolocationPosition) => {
+      setUserLocation({
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      });
+      setLocationStatus('granted');
+    };
+
+    const handleTerminalLocationError = (error: GeolocationPositionError) => {
+      if (error.code === error.PERMISSION_DENIED) {
+        setLocationStatus('denied');
+        setUserLocation(null);
+        return;
+      }
+      setLocationStatus('error');
+      setUserLocation(null);
+    };
+
+    const requestHighAccuracyRetry = () => {
+      navigator.geolocation.getCurrentPosition(
+        applyPosition,
+        handleTerminalLocationError,
+        {
+          enableHighAccuracy: true,
+          timeout: 30_000,
+          maximumAge: 0,
+        }
+      );
+    };
+
     setLocationStatus('requesting');
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setUserLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
-        setLocationStatus('granted');
-      },
+      applyPosition,
       (error) => {
         if (error.code === error.PERMISSION_DENIED) {
           setLocationStatus('denied');
           setUserLocation(null);
           return;
         }
-        setLocationStatus('error');
+        requestHighAccuracyRetry();
       },
       {
-        enableHighAccuracy: true,
-        timeout: 10_000,
-        maximumAge: 300_000,
+        enableHighAccuracy: false,
+        timeout: 20_000,
+        maximumAge: 600_000,
       }
     );
   };
@@ -1091,7 +1115,7 @@ export default function App() {
                 const hasToken = Boolean(session.token);
                 setIsAuthenticated(hasToken);
                 setCurrentUser(hasToken ? (session.user ?? null) : null);
-                setCurrentView('welcome');
+                setCurrentView('preferences');
               }}
               onBack={() => setCurrentView('welcome')}
             />
@@ -1106,7 +1130,7 @@ export default function App() {
                 const user = session.user ?? getAuthUser<AuthUser>();
                 setIsAuthenticated(Boolean(token));
                 setCurrentUser(user ?? null);
-                setCurrentView('welcome');
+                setCurrentView('preferences');
               }}
               onBack={() => setCurrentView('welcome')}
             />
