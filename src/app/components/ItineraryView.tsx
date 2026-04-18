@@ -16,7 +16,7 @@ import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { DestinationLocationPanel } from '@/app/components/DestinationLocationPanel';
 import { DestinationImageGallery } from '@/app/components/DestinationImageGallery';
 import { GeoPoint } from '@/app/utils/travel';
-import { Calendar, Trash2, Download, Share2, Wallet, Star, Map, Clock3 } from 'lucide-react';
+import { Calendar, Trash2, Download, Wallet, Star, Map, Clock3 } from 'lucide-react';
 import { calculateItinerarySchedule, getDestinationStayHours } from '@/app/utils/recommendation';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { createItinerary } from '@/app/api/itineraries';
@@ -307,10 +307,6 @@ export function ItineraryView({
               >
                 <Download className="w-4 h-4 mr-2" />
                 Download
-              </Button>
-              <Button variant="outline" size="sm" className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md">
-                <Share2 className="w-4 h-4 mr-2" />
-                Share
               </Button>
             </div>
           </div>
