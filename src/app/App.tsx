@@ -23,6 +23,8 @@ import { EditableItineraryView } from '@/app/components/EditableItineraryView';
 import { AllDestinationsView } from '@/app/components/AllDestinationsView';
 import { CollaborationNotifications } from '@/app/components/CollaborationNotifications';
 import { ZoomableImage } from '@/app/components/ZoomableImage';
+import { FeatureCard } from '@/app/components/FeatureCard';
+import { FeatureModals, type FeatureModalId } from '@/app/components/FeatureModals';
 import { Button } from '@/app/components/ui/button';
 import {
   Dialog,
@@ -47,6 +49,12 @@ type AppView =
   | 'all-destinations'
   | 'recommendations';
 
+type PreferencePreset = {
+  planningMode?: 'preferences' | 'budget';
+  budget?: number;
+  duration?: number;
+};
+
 export default function App() {
   const isMobile = useIsMobile();
   const prefersReducedMotion = useReducedMotion();
@@ -68,6 +76,8 @@ export default function App() {
   const [lastRecommendationBudget, setLastRecommendationBudget] = useState<RecommendationBudgetSummary | null>(null);
   const [destinationRatings, setDestinationRatings] = useState<Record<string, number>>({});
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [activeModal, setActiveModal] = useState<FeatureModalId | null>(null);
+  const [preferencePreset, setPreferencePreset] = useState<PreferencePreset | null>(null);
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [logoutStep, setLogoutStep] = useState<'confirm' | 'thanks'>('confirm');
   const [userLocation, setUserLocation] = useState<GeoPoint | null>(null);
@@ -632,12 +642,35 @@ export default function App() {
     );
   };
 
-  const handleStartPlanning = () => {
+  const navigateToPreferencesWithAuth = (preset?: PreferencePreset) => {
+    setPreferencePreset(preset ?? null);
     if (!isAuthenticated) {
       setShowAuthPrompt(true);
       return;
     }
     setCurrentView('preferences');
+  };
+
+  const handleStartPlanning = () => {
+    navigateToPreferencesWithAuth();
+  };
+
+  const handleFeatureModalAction = (feature: FeatureModalId) => {
+    setActiveModal(null);
+    if (feature === 'AI_ENGINE') {
+      navigateToPreferencesWithAuth();
+      return;
+    }
+    if (feature === 'BUDGET') {
+      navigateToPreferencesWithAuth({ planningMode: 'budget', budget: 2500, duration: 2 });
+      return;
+    }
+    navigateToPreferencesWithAuth();
+  };
+
+  const handleBudgetPrefillAction = (preset: { budget: number; duration: number }) => {
+    setActiveModal(null);
+    navigateToPreferencesWithAuth({ planningMode: 'budget', budget: preset.budget, duration: preset.duration });
   };
 
   const handleLogoutAttempt = () => {
@@ -1032,34 +1065,36 @@ export default function App() {
 
             {/* Features */}
             <div className={isMobile ? "flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1 text-left" : "grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto text-left"}>
-              <div className="group min-w-[85%] snap-start rounded-lg border border-white/70 bg-white p-6 shadow-md transition-all duration-300 ease-out hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl sm:min-w-0">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 transition-transform duration-300 group-hover:scale-110">
-                  <Sparkles className="h-6 w-6 text-blue-600 transition-transform duration-300 group-hover:rotate-6" />
-                </div>
-                <h3 className="mb-2 text-lg font-semibold">AI Recommendation Engine</h3>
-                <p className="text-sm text-gray-600">
-                  Our backend AI service scores destinations using your trip preferences and profile signals
-                </p>
-              </div>
-              <div className="group min-w-[85%] snap-start rounded-lg border border-white/70 bg-white p-6 shadow-md transition-all duration-300 ease-out hover:-translate-y-1 hover:border-emerald-200 hover:shadow-xl sm:min-w-0">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-green-100 transition-transform duration-300 group-hover:scale-110">
-                  <MapPin className="h-6 w-6 text-green-600 transition-transform duration-300 group-hover:rotate-6" />
-                </div>
-                <h3 className="mb-2 text-lg font-semibold">Route and Budget Aware</h3>
-                <p className="text-sm text-gray-600">
-                  Recommendations are tailored to your available time and spending preferences
-                </p>
-              </div>
-              <div className="group min-w-[85%] snap-start rounded-lg border border-white/70 bg-white p-6 shadow-md transition-all duration-300 ease-out hover:-translate-y-1 hover:border-violet-200 hover:shadow-xl sm:min-w-0">
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-purple-100 transition-transform duration-300 group-hover:scale-110">
-                  <Sparkles className="h-6 w-6 text-purple-600 transition-transform duration-300 group-hover:rotate-6" />
-                </div>
-                <h3 className="mb-2 text-lg font-semibold">Smart Itinerary Scheduling</h3>
-                <p className="text-sm text-gray-600">
-                  Intelligent scheduling considers difficulty, duration, and optimal daily activity distribution
-                </p>
-              </div>
+              <FeatureCard
+                title="AI Recommendation Engine"
+                description="Hybrid AI scoring uses destination attributes, user similarity, and interaction signals."
+                icon={<Sparkles className="h-6 w-6 transition-transform duration-300 group-hover:rotate-6" />}
+                tone="blue"
+                onClick={() => setActiveModal('AI_ENGINE')}
+              />
+              <FeatureCard
+                title="Route and Budget Aware"
+                description="Knapsack optimization balances destination value against budget and duration limits."
+                icon={<MapPin className="h-6 w-6 transition-transform duration-300 group-hover:rotate-6" />}
+                tone="emerald"
+                onClick={() => setActiveModal('BUDGET')}
+              />
+              <FeatureCard
+                title="Smart Itinerary Scheduling"
+                description="Day-by-day scheduling ranks priorities and balances activity load for each trip day."
+                icon={<Sparkles className="h-6 w-6 transition-transform duration-300 group-hover:rotate-6" />}
+                tone="violet"
+                onClick={() => setActiveModal('SCHEDULER')}
+              />
             </div>
+
+            <FeatureModals
+              activeModal={activeModal}
+              onClose={() => setActiveModal(null)}
+              onGenerateRecommendations={() => handleFeatureModalAction('AI_ENGINE')}
+              onOpenBudgetPlan={handleBudgetPrefillAction}
+              onGenerateItinerary={() => handleFeatureModalAction('SCHEDULER')}
+            />
 
             <Button 
               size="lg" 
@@ -1176,7 +1211,14 @@ export default function App() {
                 </div>
               </div>
             )}
-            <PreferenceForm onSubmit={handlePreferencesSubmit} onLocationChange={setUserLocation} />
+            <PreferenceForm
+              onSubmit={async (prefs) => {
+                setPreferencePreset(null);
+                await handlePreferencesSubmit(prefs);
+              }}
+              onLocationChange={setUserLocation}
+              initialPreset={preferencePreset}
+            />
           </div>
         )}
 

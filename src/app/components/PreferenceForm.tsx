@@ -15,6 +15,11 @@ import { Mountain, Waves, Heart, Compass, ChevronDown, ChevronUp, Sun, LucideBoo
 interface PreferenceFormProps {
   onSubmit: (preferences: UserPreferences) => void | Promise<void>;
   onLocationChange?: (location: GeoPoint | null) => void;
+  initialPreset?: {
+    planningMode?: 'preferences' | 'budget';
+    budget?: number;
+    duration?: number;
+  } | null;
 }
 
 // Fallback interest schema when backend schema is unavailable.
@@ -123,7 +128,7 @@ const interestIcons: Record<string, ComponentType<{ className?: string }>> = {
   leisure: Heart,
 };
 
-export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormProps) {
+export function PreferenceForm({ onSubmit, onLocationChange, initialPreset }: PreferenceFormProps) {
   const [interestOptionsWithSubs, setInterestOptionsWithSubs] = useState<InterestSchemaMainInterest[]>(fallbackInterestOptions);
   const [isUsingFallbackSchema, setIsUsingFallbackSchema] = useState<boolean>(true);
   const [planningMode, setPlanningMode] = useState<'preferences' | 'budget'>('preferences');
@@ -229,6 +234,19 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
     setLocationMessage('Location already enabled recently. Using your saved location.');
     onLocationChange?.(recentGrant.location);
   }, [onLocationChange]);
+
+  useEffect(() => {
+    if (!initialPreset) return;
+    if (initialPreset.planningMode) {
+      setPlanningMode(initialPreset.planningMode);
+    }
+    if (typeof initialPreset.budget === 'number' && Number.isFinite(initialPreset.budget) && initialPreset.budget >= 0) {
+      setBudget(String(Math.round(initialPreset.budget)));
+    }
+    if (typeof initialPreset.duration === 'number' && Number.isFinite(initialPreset.duration) && initialPreset.duration > 0) {
+      setDuration(String(Math.round(initialPreset.duration)));
+    }
+  }, [initialPreset]);
 
   const toggleInterest = (interest: string) => {
     const isCurrentlySelected = interests.includes(interest);
