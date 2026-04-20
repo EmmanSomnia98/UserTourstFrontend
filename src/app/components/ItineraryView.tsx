@@ -15,6 +15,7 @@ import {
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { DestinationLocationPanel } from '@/app/components/DestinationLocationPanel';
 import { DestinationImageGallery } from '@/app/components/DestinationImageGallery';
+import { ZoomableImage } from '@/app/components/ZoomableImage';
 import { GeoPoint } from '@/app/utils/travel';
 import { Calendar, Trash2, Download, Wallet, Star, Map as MapIcon, Clock3 } from 'lucide-react';
 import { calculateItinerarySchedule, getDestinationStayHours } from '@/app/utils/recommendation';
@@ -23,6 +24,7 @@ import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { createItinerary } from '@/app/api/itineraries';
 import type { RecommendationBudgetSummary } from '@/app/api/recommendations';
 import { formatPeso } from '@/app/utils/currency';
+import { toUserFacingErrorMessage } from '@/app/utils/user-facing-error';
 import { buildGoogleMapsRouteUrl, getDaySegmentDistances } from '@/app/utils/google-maps';
 import type { PDFImage } from 'pdf-lib';
 
@@ -64,12 +66,14 @@ export function ItineraryView({
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [isCompletionDialogOpen, setIsCompletionDialogOpen] = useState(false);
   const [saveNameDraft, setSaveNameDraft] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
   const [finishedDestinationKeys, setFinishedDestinationKeys] = useState<Set<string>>(new Set());
   const [expandedAddDay, setExpandedAddDay] = useState<number | null>(null);
   const saveRequestInFlight = useRef(false);
+  const wasItineraryFinishedRef = useRef(false);
   const formatHours = (value: number) => {
     const rounded = Math.round(value * 10) / 10;
     return Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(1);
@@ -115,6 +119,13 @@ export function ItineraryView({
       return next.size === prev.size ? prev : next;
     });
   }, [itineraryEntryKeys]);
+
+  useEffect(() => {
+    if (isItineraryFinished && !wasItineraryFinishedRef.current) {
+      setIsCompletionDialogOpen(true);
+    }
+    wasItineraryFinishedRef.current = isItineraryFinished;
+  }, [isItineraryFinished]);
 
   const toggleFinished = (entryKey: string) => {
     setFinishedDestinationKeys((prev) => {
@@ -174,7 +185,6 @@ export function ItineraryView({
       }
 
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
       setIsSaveDialogOpen(false);
       onSaveSuccess?.(created);
     } catch (error) {
@@ -184,15 +194,18 @@ export function ItineraryView({
       } else if (message.includes('(400)') || message.includes('(422)')) {
         setSaveError('Unable to save this itinerary due to invalid trip data. Please adjust destinations and try again.');
       } else if (message.includes('(404)')) {
-        setSaveError('Save endpoint was not found on the server. Please verify backend deployment.');
+        setSaveError('We could not save your itinerary right now. Please try again in a moment.');
       } else if (message.includes('(500)') || message.includes('(502)') || message.includes('(503)')) {
         setSaveError('Server error while saving itinerary. Please try again in a moment.');
       } else if (message.toLowerCase().includes('failed to fetch')) {
         setSaveError('Cannot reach the server right now. Check your network and try again.');
-      } else if (message.trim()) {
-        setSaveError(message);
       } else {
-        setSaveError('Failed to save itinerary. Please try again.');
+        setSaveError(
+          toUserFacingErrorMessage(error, {
+            action: 'save your itinerary',
+            fallback: 'Failed to save itinerary. Please try again.',
+          })
+        );
       }
     } finally {
       setIsSaving(false);
@@ -809,10 +822,11 @@ export function ItineraryView({
                   >
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex flex-col gap-3 sm:flex-row sm:gap-4 flex-1">
-                        <img
+                        <ZoomableImage
                           src={dest.image}
                           alt={dest.name}
-                          className="w-full h-32 sm:w-24 sm:h-24 object-cover rounded-lg flex-shrink-0 transition-transform duration-300 group-hover:scale-105"
+                          className="w-full sm:w-24 sm:flex-shrink-0"
+                          imageClassName="h-32 w-full rounded-lg object-cover transition-transform duration-300 group-hover:scale-105 sm:h-24 sm:w-24"
                         />
                         <div className="flex-1 space-y-2">
                           <div>
@@ -951,16 +965,6 @@ export function ItineraryView({
             </Button>
           </div>
         </div>
-        {saveSuccess && (
-          <div className="mt-4 text-sm text-green-500">
-            Itinerary saved successfully!
-          </div>
-        )}
-        {isItineraryFinished && (
-          <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-            Great job! You have finished all destinations in this itinerary.
-          </div>
-        )}
       </Card>
 
       <Dialog
@@ -1008,6 +1012,61 @@ export function ItineraryView({
             </Button>
             <Button onClick={() => void handleSave()} size="sm" disabled={isSaving}>
               {isSaving ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={saveSuccess}
+        onOpenChange={(nextOpen) => {
+          setSaveSuccess(nextOpen);
+        }}
+      >
+        <DialogContent className="sm:max-w-md p-5">
+          <DialogHeader>
+            <DialogTitle>Itinerary Saved</DialogTitle>
+            <DialogDescription>
+              Your generated itinerary has been saved successfully.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSaveSuccess(false)}
+              size="sm"
+            >
+              Continue Planning
+            </Button>
+            {onViewSavedItineraries && (
+              <Button
+                onClick={() => {
+                  setSaveSuccess(false);
+                  onViewSavedItineraries();
+                }}
+                size="sm"
+              >
+                View My Itineraries
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isCompletionDialogOpen}
+        onOpenChange={setIsCompletionDialogOpen}
+      >
+        <DialogContent className="sm:max-w-md p-5">
+          <DialogHeader>
+            <DialogTitle>Itinerary Completed</DialogTitle>
+            <DialogDescription>
+              Great job! You have finished all destinations in this itinerary.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setIsCompletionDialogOpen(false)} size="sm">
+              Awesome
             </Button>
           </DialogFooter>
         </DialogContent>

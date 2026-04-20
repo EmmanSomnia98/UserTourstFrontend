@@ -7,6 +7,7 @@ import {
   markNotificationRead,
   respondToInvitation,
 } from '@/app/api/collaboration';
+import { toUserFacingErrorMessage } from '@/app/utils/user-facing-error';
 
 type CollaborationNotificationsProps = {
   isAuthenticated: boolean;
@@ -66,7 +67,12 @@ export function CollaborationNotifications({
         );
       } catch (loadError) {
         if (!active) return;
-        setError(loadError instanceof Error ? loadError.message : 'Failed to load notifications.');
+        setError(
+          toUserFacingErrorMessage(loadError, {
+            action: 'load notifications',
+            fallback: 'We could not load notifications right now. Please try again.',
+          })
+        );
       } finally {
         if (!active) return;
         setIsLoading(false);
@@ -144,7 +150,12 @@ export function CollaborationNotifications({
           // Keep local read state even if mark-read call fails.
         }
       } else {
-        setError(message);
+        setError(
+          toUserFacingErrorMessage(actionError, {
+            action: 'update this invitation',
+            fallback: 'We could not update this invitation. Please try again.',
+          })
+        );
       }
     } finally {
       setActingId(null);

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { DestinationLocationPanel } from '@/app/components/DestinationLocationPanel';
 import { DestinationImageGallery } from '@/app/components/DestinationImageGallery';
+import { ZoomableImage } from '@/app/components/ZoomableImage';
 import { Calendar, Trash2, Plus, Save, X, Edit2, Wallet, Star, Map as MapIcon } from 'lucide-react';
 import { calculateItinerarySchedule, getDestinationStayHours } from '@/app/utils/recommendation';
 import { formatInterestList } from '@/app/utils/interests';
@@ -18,6 +19,7 @@ import { inviteCollaboratorToItinerary } from '@/app/api/collaboration';
 import { useItineraryCollaboration } from '@/app/hooks/use-itinerary-collaboration';
 import { GeoPoint } from '@/app/utils/travel';
 import { buildGoogleMapsRouteUrl, getDaySegmentDistances } from '@/app/utils/google-maps';
+import { toUserFacingErrorMessage } from '@/app/utils/user-facing-error';
 
 interface EditableItineraryViewProps {
   savedItinerary: SavedItinerary;
@@ -171,7 +173,12 @@ export function EditableItineraryView({
       setInviteQuery('');
       setInviteMessage('Invitation sent.');
     } catch (error) {
-      setInviteMessage(error instanceof Error ? error.message : 'Failed to send invitation.');
+      setInviteMessage(
+        toUserFacingErrorMessage(error, {
+          action: 'send the invitation',
+          fallback: 'Unable to send the invitation right now. Please try again.',
+        })
+      );
     } finally {
       setIsInviting(false);
     }
@@ -211,7 +218,12 @@ export function EditableItineraryView({
       if (message.includes('(500)')) {
         setSaveError('Server error while saving changes. Please try again.');
       } else {
-        setSaveError(error instanceof Error ? error.message : 'Failed to save changes.');
+        setSaveError(
+          toUserFacingErrorMessage(error, {
+            action: 'save your changes',
+            fallback: 'Failed to save changes. Please try again.',
+          })
+        );
       }
     } finally {
       setIsSaving(false);
@@ -231,7 +243,12 @@ export function EditableItineraryView({
       setIsDeleteDialogOpen(false);
       onBack();
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Failed to delete itinerary.');
+      setSaveError(
+        toUserFacingErrorMessage(error, {
+          action: 'delete this itinerary',
+          fallback: 'Failed to delete itinerary.',
+        })
+      );
     } finally {
       setIsSaving(false);
     }
@@ -384,10 +401,11 @@ export function EditableItineraryView({
             {availableDestinations.map((dest, index) => (
               <Card key={dest.id ?? `${dest.name}-${index}`} className="group p-4 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md">
                 <div className="flex gap-4">
-                  <img
+                  <ZoomableImage
                     src={dest.image}
                     alt={dest.name}
-                    className="w-20 h-20 object-cover rounded-lg flex-shrink-0 transition-transform duration-300 group-hover:scale-105"
+                    className="w-20 flex-shrink-0"
+                    imageClassName="h-20 w-20 rounded-lg object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                   <div className="flex-1 space-y-2">
                     <div>
@@ -491,10 +509,11 @@ export function EditableItineraryView({
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:gap-4">
-                          <img
+                          <ZoomableImage
                             src={dest.image}
                             alt={dest.name}
-                            className="h-36 w-full rounded-lg object-cover transition-transform duration-300 group-hover:scale-105 sm:h-24 sm:w-24 sm:flex-shrink-0"
+                            className="w-full sm:w-24 sm:flex-shrink-0"
+                            imageClassName="h-36 w-full rounded-lg object-cover transition-transform duration-300 group-hover:scale-105 sm:h-24 sm:w-24"
                           />
                           <div className="min-w-0 flex-1 space-y-2">
                             <div>

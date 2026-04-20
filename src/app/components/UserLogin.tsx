@@ -3,7 +3,8 @@ import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
 import { loginUser, type AuthUser } from "@/app/api/auth";
-import { ArrowRight, KeyRound, Mail } from "lucide-react";
+import { toUserFacingErrorMessage } from "@/app/utils/user-facing-error";
+import { ArrowRight, Eye, EyeOff, KeyRound, Mail } from "lucide-react";
 
 type UserLoginProps = {
   onLogin: (session: { token?: string; user?: AuthUser }) => void;
@@ -13,6 +14,7 @@ type UserLoginProps = {
 export function UserLogin({ onLogin, onBack }: UserLoginProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +36,12 @@ export function UserLogin({ onLogin, onBack }: UserLoginProps) {
               const session = await loginUser(email, password);
               onLogin(session);
             } catch (err) {
-              setError(err instanceof Error ? err.message : "Login failed. Please try again.");
+              setError(
+                toUserFacingErrorMessage(err, {
+                  action: "sign in",
+                  fallback: "Unable to sign in right now. Please try again.",
+                })
+              );
             } finally {
               setIsSubmitting(false);
             }
@@ -63,14 +70,23 @@ export function UserLogin({ onLogin, onBack }: UserLoginProps) {
               <KeyRound className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 id="user-password"
-                type="password"
+                type={isPasswordVisible ? "text" : "password"}
                 placeholder="Enter your password"
                 autoComplete="current-password"
-                className="pl-9 transition-colors duration-200 hover:border-slate-400 focus-visible:ring-blue-200"
+                className="pl-9 pr-10 transition-colors duration-200 hover:border-slate-400 focus-visible:ring-blue-200"
                 required
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
               />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
+                onClick={() => setIsPasswordVisible((visible) => !visible)}
+                aria-label={isPasswordVisible ? "Hide password" : "Show password"}
+                aria-pressed={isPasswordVisible}
+              >
+                {isPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
             </div>
           </div>
 

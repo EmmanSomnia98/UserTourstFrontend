@@ -9,6 +9,7 @@ import { Textarea } from '@/app/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { GeoPoint } from '@/app/utils/travel';
 import { createDestinationComment, DestinationComment, fetchDestinationComments } from '@/app/api/comments';
+import { toUserFacingErrorMessage } from '@/app/utils/user-facing-error';
 import { Search, ArrowLeft } from 'lucide-react';
 
 type AllDestinationsViewProps = {
@@ -58,7 +59,12 @@ export function AllDestinationsView({
       })
       .catch((error) => {
         if (!active) return;
-        setCommentsError(error instanceof Error ? error.message : 'Failed to load comments.');
+        setCommentsError(
+          toUserFacingErrorMessage(error, {
+            action: 'load comments',
+            fallback: 'We could not load comments right now. Please try again.',
+          })
+        );
       })
       .finally(() => {
         if (!active) return;
@@ -119,7 +125,12 @@ export function AllDestinationsView({
       });
       setCommentDraft('');
     } catch (error) {
-      setCommentsError(error instanceof Error ? error.message : 'Failed to post comment.');
+      setCommentsError(
+        toUserFacingErrorMessage(error, {
+          action: 'post your comment',
+          fallback: 'We could not post your comment. Please try again.',
+        })
+      );
     } finally {
       setIsPostingComment(false);
     }
@@ -129,8 +140,8 @@ export function AllDestinationsView({
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-900">All Destinations</h2>
-          <p className="text-sm text-black">
+          <h2 className="text-2xl font-semibold text-white">All Destinations</h2>
+          <p className="text-sm text-white">
             Browse all destinations in the system and search quickly by name, type, or interest.
           </p>
         </div>

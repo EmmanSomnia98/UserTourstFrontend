@@ -22,6 +22,7 @@ import { SavedItinerariesView } from '@/app/components/SavedItinerariesView';
 import { EditableItineraryView } from '@/app/components/EditableItineraryView';
 import { AllDestinationsView } from '@/app/components/AllDestinationsView';
 import { CollaborationNotifications } from '@/app/components/CollaborationNotifications';
+import { ZoomableImage } from '@/app/components/ZoomableImage';
 import { Button } from '@/app/components/ui/button';
 import {
   Dialog,
@@ -31,7 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/app/components/ui/dialog';
-import { MapPin, Sparkles, BookOpen, LocateFixed } from 'lucide-react';
+import { MapPin, Sparkles, BookOpen, LocateFixed, Menu } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import backgroundImage from '@/assets/bulusan-lake.jpg';
 
@@ -777,7 +778,7 @@ export default function App() {
         style={{ backgroundImage: `url(${backgroundImage})` }}
         aria-hidden="true"
       />
-      <div className="absolute inset-0 bg-white/30" aria-hidden="true" />
+      <div className="absolute inset-0 bg-black/40" aria-hidden="true" />
       <div className="relative z-10">
       {/* Header */}
       <header className="bg-white shadow-sm">
@@ -838,17 +839,7 @@ export default function App() {
                 }
                 onClick={() => setIsMobileNavOpen(true)}
               >
-                <span
-                  aria-hidden="true"
-                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-base leading-none text-slate-700"
-                >
-                  ≡
-                </span>
-                {!isMobile && (
-                  <span className="ml-2 whitespace-nowrap text-xs font-medium opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                    Menu
-                  </span>
-                )}
+                <Menu aria-hidden="true" className="h-5 w-5 shrink-0 text-slate-700" />
               </Button>
             </div>
           </div>
@@ -929,14 +920,14 @@ export default function App() {
         {currentView === 'welcome' && (
           <div className="text-center space-y-6 sm:space-y-8 py-8 sm:py-12">
             <div className="space-y-3 sm:space-y-4">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/20 px-4 py-2 text-white backdrop-blur-sm">
                 <Sparkles className="w-5 h-5" />
                 <span className="font-medium">AI-Powered Recommendations</span>
               </div>
-              <h2 className="text-3xl font-bold text-gray-900 sm:text-5xl">
+              <h2 className="text-3xl font-bold text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] sm:text-5xl">
                 Discover Bulusan, Sorsogon
               </h2>
-              <p className="text-sm text-black-600 font-medium max-w-3xl mx-auto sm:text-xl">
+              <p className="text-sm font-medium text-slate-100 drop-shadow-sm max-w-3xl mx-auto sm:text-xl">
                 Let our AI recommendation engine generate a personalized travel itinerary
                 based on your preferences, interests, and travel style. Experience the best of
                 Bulusan&apos;s natural wonders, cultural heritage, and adventure destinations.
@@ -960,9 +951,14 @@ export default function App() {
                       return (
                         <div className="mx-auto max-w-[720px]">
                           <div className="relative h-56 overflow-hidden rounded-2xl border border-white/60 bg-black shadow-xl sm:h-64">
-                            <img src={destination.image} alt={destination.name} className="h-full w-full object-cover" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                            <div className="absolute inset-x-0 bottom-0 p-4">
+                            <ZoomableImage
+                              src={destination.image}
+                              alt={destination.name}
+                              className="h-full w-full"
+                              imageClassName="h-full w-full object-cover"
+                            />
+                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                            <div className="pointer-events-none absolute inset-x-0 bottom-0 p-4">
                               <p className="text-lg font-semibold text-white sm:text-xl">{destination.name}</p>
                             </div>
                           </div>
@@ -990,13 +986,14 @@ export default function App() {
                                     : 'h-48 w-[48vw] scale-95 opacity-85 shadow-lg sm:h-56 sm:w-[320px]'
                                 }`}
                               >
-                                <img
+                                <ZoomableImage
                                   src={destination.image}
                                   alt={destination.name}
-                                  className="h-full w-full object-cover transition-transform duration-700 ease-out"
+                                  className="h-full w-full"
+                                  imageClassName="h-full w-full object-cover transition-transform duration-700 ease-out"
                                 />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                                <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4">
+                                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                                <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3 sm:p-4">
                                   <p className={`text-white drop-shadow-sm ${isCenter ? 'text-base font-semibold sm:text-2xl' : 'text-sm font-medium sm:text-lg'}`}>
                                     {destination.name}
                                   </p>

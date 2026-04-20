@@ -7,6 +7,7 @@ import { Label } from '@/app/components/ui/label';
 import { Input } from '@/app/components/ui/input';
 import { UserPreferences } from '@/app/types/destination';
 import { GeoPoint } from '@/app/utils/travel';
+import { toUserFacingErrorMessage } from '@/app/utils/user-facing-error';
 import { clearRecentLocationGrant, getRecentLocationGrant, setRecentLocationGrant } from '@/app/utils/location-access';
 import { fetchInterestsSchema, InterestSchemaMainInterest } from '@/app/api/destinations';
 import { Mountain, Waves, Heart, Compass, ChevronDown, ChevronUp, Sun, LucideBook, Ship, Camera, LocateFixed } from 'lucide-react';
@@ -358,7 +359,12 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
       });
     } catch (error) {
       console.error('Failed to submit preferences:', error);
-      setSubmitError(error instanceof Error ? error.message : 'We could not generate your itinerary. Please try again.');
+      setSubmitError(
+        toUserFacingErrorMessage(error, {
+          action: 'generate your itinerary',
+          fallback: 'We could not generate your itinerary. Please try again.',
+        })
+      );
     } finally {
       setIsSubmitting(false);
     }

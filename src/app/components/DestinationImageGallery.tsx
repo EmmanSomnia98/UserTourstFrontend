@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Destination } from '@/app/types/destination';
+import { ZoomableImage } from '@/app/components/ZoomableImage';
 
 interface DestinationImageGalleryProps {
   destination: Destination;
@@ -42,10 +43,11 @@ export function DestinationImageGallery({ destination, className = '' }: Destina
 
   return (
     <div className={className}>
-      <img
+      <ZoomableImage
         src={activeImage}
         alt={`${destination.name} image ${activeIndex + 1}`}
-        className="w-full h-56 sm:h-72 object-cover rounded-lg"
+        className="rounded-lg"
+        imageClassName="h-56 w-full rounded-lg object-cover sm:h-72"
       />
       {images.length > 1 && (
         <div className="mt-2 flex gap-2 overflow-x-auto pb-1">

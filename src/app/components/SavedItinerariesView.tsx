@@ -4,9 +4,11 @@ import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
+import { ZoomableImage } from '@/app/components/ZoomableImage';
 import { MapPin, Trash2, Edit, DollarSign, Eye, Clock3 } from 'lucide-react';
 import { deleteRemoteItinerary, fetchItineraries } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
+import { toUserFacingErrorMessage } from '@/app/utils/user-facing-error';
 
 interface SavedItinerariesViewProps {
   onViewItinerary: (itinerary: SavedItinerary) => void;
@@ -62,13 +64,18 @@ export function SavedItinerariesView({
       setSavedItineraries(refreshed);
       const stillExists = refreshed.some((item) => item.id === id);
       if (stillExists) {
-        setDeleteError('Delete request completed but itinerary still exists on server.');
+        setDeleteError('We could not confirm the delete yet. Please refresh and try again.');
         return;
       }
       onDeleteItinerarySuccess?.(id);
     } catch (error) {
       console.error('Failed to delete itinerary:', error);
-      setDeleteError(error instanceof Error ? error.message : 'Failed to delete itinerary.');
+      setDeleteError(
+        toUserFacingErrorMessage(error, {
+          action: 'delete this itinerary',
+          fallback: 'Unable to delete this itinerary right now. Please try again.',
+        })
+      );
     } finally {
       setDeletingId(null);
     }
@@ -103,8 +110,8 @@ export function SavedItinerariesView({
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-3xl font-bold text-gray-900">My Saved Itineraries</h2>
-          <p className="text-black mt-2">
+          <h2 className="text-3xl font-bold text-white">My Saved Itineraries</h2>
+          <p className="text-white mt-2">
             {status === 'loading'
               ? 'Loading your itineraries...'
               : savedItineraries.length === 0 
@@ -161,14 +168,15 @@ export function SavedItinerariesView({
               {/* Card Header with Image */}
               <div className="relative h-48 bg-gradient-to-br from-blue-400 to-green-400">
                 {itinerary.destinations[0]?.image && (
-                  <img 
+                  <ZoomableImage
                     src={itinerary.destinations[0].image} 
                     alt={itinerary.destinations[0].name}
-                    className="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-105"
+                    className="h-full w-full"
+                    imageClassName="h-full w-full object-cover transition duration-500 ease-out group-hover:scale-105"
                   />
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-70 transition-opacity duration-300 group-hover:opacity-100" />
-                <div className="absolute top-4 right-4">
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-70 transition-opacity duration-300 group-hover:opacity-100" />
+                <div className="pointer-events-none absolute top-4 right-4">
                   <Badge className="bg-white text-gray-900 shadow-sm transition-all duration-300 group-hover:shadow">
                     {itinerary.tripDays} {itinerary.tripDays === 1 ? 'Day' : 'Days'}
                   </Badge>
