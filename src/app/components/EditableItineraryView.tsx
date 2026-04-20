@@ -11,6 +11,7 @@ import { DestinationLocationPanel } from '@/app/components/DestinationLocationPa
 import { DestinationImageGallery } from '@/app/components/DestinationImageGallery';
 import { Calendar, Trash2, Plus, Save, X, Edit2, Wallet, Star, Map as MapIcon } from 'lucide-react';
 import { calculateItinerarySchedule, getDestinationStayHours } from '@/app/utils/recommendation';
+import { formatInterestList } from '@/app/utils/interests';
 import { deleteRemoteItinerary, updateItinerary } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
 import { inviteCollaboratorToItinerary } from '@/app/api/collaboration';
@@ -502,6 +503,16 @@ export function EditableItineraryView({
                               </div>
                               <p className="line-clamp-2 break-words text-sm text-gray-600">{dest.description}</p>
                             </div>
+                            {(() => {
+                              const subInterestLabels = formatInterestList(dest.subInterests);
+                              if (subInterestLabels.length === 0) return null;
+                              return (
+                                <p className="text-xs text-slate-600">
+                                  <span className="font-medium text-slate-700">Sub-interests:</span>{' '}
+                                  {subInterestLabels.join(', ')}
+                                </p>
+                              );
+                            })()}
                             
                             <div className="flex flex-wrap gap-2">
                               <Badge variant="secondary" className="text-xs">

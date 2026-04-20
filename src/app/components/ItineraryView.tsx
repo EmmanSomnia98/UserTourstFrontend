@@ -18,6 +18,7 @@ import { DestinationImageGallery } from '@/app/components/DestinationImageGaller
 import { GeoPoint } from '@/app/utils/travel';
 import { Calendar, Trash2, Download, Wallet, Star, Map as MapIcon, Clock3 } from 'lucide-react';
 import { calculateItinerarySchedule, getDestinationStayHours } from '@/app/utils/recommendation';
+import { formatInterestList } from '@/app/utils/interests';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { createItinerary } from '@/app/api/itineraries';
 import type { RecommendationBudgetSummary } from '@/app/api/recommendations';
@@ -820,6 +821,16 @@ export function ItineraryView({
                             </div>
                             <p className="text-sm text-gray-600 line-clamp-2">{dest.description}</p>
                           </div>
+                          {(() => {
+                            const subInterestLabels = formatInterestList(dest.subInterests);
+                            if (subInterestLabels.length === 0) return null;
+                            return (
+                              <p className="text-xs text-slate-600">
+                                <span className="font-medium text-slate-700">Sub-interests:</span>{' '}
+                                {subInterestLabels.join(', ')}
+                              </p>
+                            );
+                          })()}
                           
                           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 pt-1">
                             <div className="flex items-center gap-1">

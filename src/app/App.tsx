@@ -12,6 +12,7 @@ import { buildFeedbackEvent, flushFeedbackQueue, recordFeedbackEvent } from '@/a
 import { useIsMobile } from '@/app/components/ui/use-mobile';
 import { calculateContentScore, getDestinationStayHours } from '@/app/utils/recommendation';
 import { GeoPoint } from '@/app/utils/travel';
+import { clearRecentLocationGrant, getRecentLocationGrant, setRecentLocationGrant } from '@/app/utils/location-access';
 import { PreferenceForm } from '@/app/components/PreferenceForm';
 import { UserLogin } from '@/app/components/UserLogin';
 import { UserSignup } from '@/app/components/UserSignup';
@@ -186,6 +187,13 @@ export default function App() {
       active = false;
     };
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    const recentGrant = getRecentLocationGrant();
+    if (!recentGrant) return;
+    setUserLocation(recentGrant.location);
+    setLocationStatus('granted');
+  }, []);
 
   const trackEvent = (
     eventType: Parameters<typeof buildFeedbackEvent>[0],
@@ -571,15 +579,18 @@ export default function App() {
     }
 
     const applyPosition = (position: GeolocationPosition) => {
-      setUserLocation({
+      const nextLocation = {
         lat: position.coords.latitude,
         lng: position.coords.longitude,
-      });
+      };
+      setUserLocation(nextLocation);
+      setRecentLocationGrant(nextLocation);
       setLocationStatus('granted');
     };
 
     const handleTerminalLocationError = (error: GeolocationPositionError) => {
       if (error.code === error.PERMISSION_DENIED) {
+        clearRecentLocationGrant();
         setLocationStatus('denied');
         setUserLocation(null);
         return;
@@ -605,6 +616,7 @@ export default function App() {
       applyPosition,
       (error) => {
         if (error.code === error.PERMISSION_DENIED) {
+          clearRecentLocationGrant();
           setLocationStatus('denied');
           setUserLocation(null);
           return;

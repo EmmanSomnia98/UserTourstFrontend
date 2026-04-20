@@ -7,6 +7,7 @@ import { Label } from '@/app/components/ui/label';
 import { Input } from '@/app/components/ui/input';
 import { UserPreferences } from '@/app/types/destination';
 import { GeoPoint } from '@/app/utils/travel';
+import { clearRecentLocationGrant, getRecentLocationGrant, setRecentLocationGrant } from '@/app/utils/location-access';
 import { fetchInterestsSchema, InterestSchemaMainInterest } from '@/app/api/destinations';
 import { Mountain, Waves, Heart, Compass, ChevronDown, ChevronUp, Sun, LucideBook, Ship, Camera, LocateFixed } from 'lucide-react';
 
@@ -220,6 +221,14 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
     setExpandedInterests((prev) => prev.filter((id) => mainInterestIds.includes(id)));
   }, [mainInterestIds.join('|'), allSubInterestIds.join('|')]);
 
+  useEffect(() => {
+    const recentGrant = getRecentLocationGrant();
+    if (!recentGrant) return;
+    setLocationStatus('granted');
+    setLocationMessage('Location already enabled recently. Using your saved location.');
+    onLocationChange?.(recentGrant.location);
+  }, [onLocationChange]);
+
   const toggleInterest = (interest: string) => {
     const isCurrentlySelected = interests.includes(interest);
     
@@ -369,12 +378,14 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
         lng: position.coords.longitude,
       };
       onLocationChange?.(nextLocation);
+      setRecentLocationGrant(nextLocation);
       setLocationStatus('granted');
       setLocationMessage('Location access enabled. Travel times will use your current location.');
     };
 
     const handleTerminalLocationError = (error: GeolocationPositionError) => {
       if (error.code === error.PERMISSION_DENIED) {
+        clearRecentLocationGrant();
         setLocationStatus('denied');
         setLocationMessage('Location access was denied. You can enable it and try again.');
         onLocationChange?.(null);
@@ -416,6 +427,7 @@ export function PreferenceForm({ onSubmit, onLocationChange }: PreferenceFormPro
       applyPosition,
       (error) => {
         if (error.code === error.PERMISSION_DENIED) {
+          clearRecentLocationGrant();
           setLocationStatus('denied');
           setLocationMessage('Location access was denied. You can enable it and try again.');
           onLocationChange?.(null);

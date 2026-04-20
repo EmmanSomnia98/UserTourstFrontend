@@ -3,6 +3,7 @@ import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { formatPeso } from '@/app/utils/currency';
+import { formatInterestList } from '@/app/utils/interests';
 import { GeoPoint } from '@/app/utils/travel';
 import { Star, Clock, TrendingUp, MapPin, Plus, Check, Info } from 'lucide-react';
 
@@ -79,6 +80,16 @@ export function DestinationCard({
           </div>
           
           <p className="text-sm text-gray-600 line-clamp-2">{destination.description}</p>
+          {(() => {
+            const subInterestLabels = formatInterestList(destination.subInterests);
+            if (subInterestLabels.length === 0) return null;
+            return (
+              <p className="text-xs text-slate-600">
+                <span className="font-medium text-slate-700">Sub-interests:</span>{' '}
+                {subInterestLabels.join(', ')}
+              </p>
+            );
+          })()}
         </div>
 
         <div className="flex items-center justify-between text-sm text-gray-600">
