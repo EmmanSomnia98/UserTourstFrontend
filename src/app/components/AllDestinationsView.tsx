@@ -17,8 +17,6 @@ type AllDestinationsViewProps = {
   status: 'idle' | 'loading' | 'error';
   onBack: () => void;
   userLocation?: GeoPoint | null;
-  onRateDestination?: (destination: Destination, rating: number) => void;
-  destinationRatings?: Record<string, number>;
 };
 
 export function AllDestinationsView({
@@ -26,8 +24,6 @@ export function AllDestinationsView({
   status,
   onBack,
   userLocation,
-  onRateDestination,
-  destinationRatings,
 }: AllDestinationsViewProps) {
   const [query, setQuery] = useState('');
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
@@ -203,8 +199,6 @@ export function AllDestinationsView({
               <DestinationCard
                 destination={destination}
                 userLocation={userLocation}
-                userRating={destinationRatings?.[destination.id]}
-                onRateDestination={onRateDestination}
               />
             </div>
           ))}

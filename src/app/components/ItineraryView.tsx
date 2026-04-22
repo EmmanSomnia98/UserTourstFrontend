@@ -21,6 +21,7 @@ import { Calendar, Trash2, Download, Wallet, Star, Map as MapIcon, Clock3 } from
 import { calculateItinerarySchedule, getDestinationStayHours } from '@/app/utils/recommendation';
 import { formatInterestList } from '@/app/utils/interests';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
+import type { SavedItineraryProgress } from '@/app/types/saved-itinerary';
 import { createItinerary } from '@/app/api/itineraries';
 import type { RecommendationBudgetSummary } from '@/app/api/recommendations';
 import { formatPeso } from '@/app/utils/currency';
@@ -32,6 +33,9 @@ interface ItineraryViewProps {
   destinations: Destination[];
   allDestinations: Destination[];
   tripDays: number;
+  isSavedItinerary?: boolean;
+  savedItineraryId?: string;
+  savedProgress?: SavedItineraryProgress;
   userInterests?: string[];
   interestRanks?: Record<string, number>;
   recommendationAlgorithm?: string | null;
@@ -42,6 +46,7 @@ interface ItineraryViewProps {
   onViewSavedItineraries?: () => void;
   onSaveSuccess?: (savedItinerary: SavedItinerary) => void;
   onRateDestination?: (destination: Destination, rating: number) => void;
+  onSavedProgressChange?: (progress: SavedItineraryProgress) => void;
   destinationRatings?: Record<string, number>;
   userLocation?: GeoPoint | null;
 }
@@ -50,6 +55,9 @@ export function ItineraryView({
   destinations,
   allDestinations,
   tripDays,
+  isSavedItinerary = false,
+  savedItineraryId,
+  savedProgress,
   userInterests = [],
   interestRanks,
   recommendationAlgorithm,
@@ -60,6 +68,7 @@ export function ItineraryView({
   onViewSavedItineraries,
   onSaveSuccess,
   onRateDestination,
+  onSavedProgressChange,
   destinationRatings,
   userLocation
 }: ItineraryViewProps) {
@@ -67,13 +76,19 @@ export function ItineraryView({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [isCompletionDialogOpen, setIsCompletionDialogOpen] = useState(false);
+  const [activeCompletedDay, setActiveCompletedDay] = useState<number | null>(null);
+  const [pendingCompletedDays, setPendingCompletedDays] = useState<number[]>([]);
+  const [ratingUnlockedDays, setRatingUnlockedDays] = useState<Set<number>>(new Set());
   const [saveNameDraft, setSaveNameDraft] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [selectedDestination, setSelectedDestination] = useState<Destination | null>(null);
-  const [finishedDestinationKeys, setFinishedDestinationKeys] = useState<Set<string>>(new Set());
+  const [finishedDestinationKeys, setFinishedDestinationKeys] = useState<Set<string>>(
+    () => new Set(savedProgress?.finishedEntryKeys ?? [])
+  );
   const [expandedAddDay, setExpandedAddDay] = useState<number | null>(null);
   const saveRequestInFlight = useRef(false);
-  const wasItineraryFinishedRef = useRef(false);
+  const prevCompletedDaysRef = useRef<Set<number>>(new Set());
+  const lastHydratedSavedItineraryRef = useRef<string | null>(null);
   const formatHours = (value: number) => {
     const rounded = Math.round(value * 10) / 10;
     return Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(1);
@@ -108,9 +123,13 @@ export function ItineraryView({
   const remainingBudget = recommendationBudget?.remainingBudget;
   const utilizationPct = recommendationBudget?.utilizationPct;
   const showBudgetSummary = Number.isFinite(maxBudget) && (maxBudget as number) > 0;
-  const isItineraryFinished =
-    itineraryEntryKeys.length > 0 &&
-    itineraryEntryKeys.every((key) => finishedDestinationKeys.has(key));
+  const isDayFinished = (day: number) => {
+    const dayDestinations = schedule.get(day) ?? [];
+    if (dayDestinations.length === 0) return false;
+    return dayDestinations.every((destination, index) =>
+      finishedDestinationKeys.has(getEntryKey(destination, day, index))
+    );
+  };
 
   useEffect(() => {
     const validKeys = new Set(itineraryEntryKeys);
@@ -121,11 +140,91 @@ export function ItineraryView({
   }, [itineraryEntryKeys]);
 
   useEffect(() => {
-    if (isItineraryFinished && !wasItineraryFinishedRef.current) {
-      setIsCompletionDialogOpen(true);
+    if (!isSavedItinerary || !savedItineraryId) return;
+    if (lastHydratedSavedItineraryRef.current === savedItineraryId) return;
+
+    const validKeys = new Set(itineraryEntryKeys);
+    const nextFinishedKeys = new Set(
+      (savedProgress?.finishedEntryKeys ?? []).filter((key) => validKeys.has(key))
+    );
+    const nextUnlockedDays = new Set(
+      (savedProgress?.ratingUnlockedDays ?? []).filter((day) => Number.isFinite(day) && day > 0)
+    );
+
+    setFinishedDestinationKeys(nextFinishedKeys);
+    setRatingUnlockedDays(nextUnlockedDays);
+    setPendingCompletedDays([]);
+    setActiveCompletedDay(null);
+    setIsCompletionDialogOpen(false);
+
+    const completedDays = new Set<number>();
+    Array.from(schedule.entries()).forEach(([day, dayDestinations]) => {
+      if (dayDestinations.length === 0) return;
+      const finished = dayDestinations.every((destination, index) =>
+        nextFinishedKeys.has(getEntryKey(destination, day, index))
+      );
+      if (finished) completedDays.add(day);
+    });
+    prevCompletedDaysRef.current = completedDays;
+    lastHydratedSavedItineraryRef.current = savedItineraryId;
+  }, [isSavedItinerary, itineraryEntryKeys, savedItineraryId, savedProgress, schedule]);
+
+  useEffect(() => {
+    const completedDays = new Set<number>();
+    Array.from(schedule.entries()).forEach(([day]) => {
+      if (isDayFinished(day)) {
+        completedDays.add(day);
+      }
+    });
+
+    const previousCompletedDays = prevCompletedDaysRef.current;
+    const newlyCompletedDays = Array.from(completedDays).filter((day) => !previousCompletedDays.has(day));
+    if (newlyCompletedDays.length > 0) {
+      setPendingCompletedDays((prev) => {
+        const existing = new Set(prev);
+        if (activeCompletedDay !== null) {
+          existing.add(activeCompletedDay);
+        }
+        const next = [...prev];
+        newlyCompletedDays.forEach((day) => {
+          if (!existing.has(day)) {
+            next.push(day);
+            existing.add(day);
+          }
+        });
+        return next;
+      });
     }
-    wasItineraryFinishedRef.current = isItineraryFinished;
-  }, [isItineraryFinished]);
+
+    prevCompletedDaysRef.current = completedDays;
+  }, [activeCompletedDay, finishedDestinationKeys, schedule]);
+
+  useEffect(() => {
+    if (!isSavedItinerary) return;
+    if (isCompletionDialogOpen) return;
+    if (activeCompletedDay !== null) return;
+    if (pendingCompletedDays.length === 0) return;
+
+    setActiveCompletedDay(pendingCompletedDays[0]);
+    setIsCompletionDialogOpen(true);
+  }, [activeCompletedDay, isCompletionDialogOpen, isSavedItinerary, pendingCompletedDays]);
+
+  useEffect(() => {
+    if (isSavedItinerary) return;
+    setIsCompletionDialogOpen(false);
+    setActiveCompletedDay(null);
+    setPendingCompletedDays([]);
+    setRatingUnlockedDays(new Set());
+    lastHydratedSavedItineraryRef.current = null;
+  }, [isSavedItinerary]);
+
+  useEffect(() => {
+    if (!isSavedItinerary || !onSavedProgressChange) return;
+    onSavedProgressChange({
+      finishedEntryKeys: Array.from(finishedDestinationKeys),
+      ratingUnlockedDays: Array.from(ratingUnlockedDays).sort((a, b) => a - b),
+    });
+  }, [finishedDestinationKeys, isSavedItinerary, onSavedProgressChange, ratingUnlockedDays]);
 
   const toggleFinished = (entryKey: string) => {
     setFinishedDestinationKeys((prev) => {
@@ -862,7 +961,7 @@ export function ItineraryView({
                             <TravelModeBadges destination={dest} origin={userLocation} />
                           </div>
                           <DestinationLocationPanel destination={dest} />
-                          {onRateDestination && (
+                          {onRateDestination && isSavedItinerary && ratingUnlockedDays.has(day) && isDayFinished(day) && (
                             <div className="space-y-1">
                               <p className="text-xs font-medium text-slate-600">Your rating</p>
                               <div className="flex items-center gap-1">
@@ -896,13 +995,17 @@ export function ItineraryView({
 
                       <div className="flex justify-end gap-2 sm:block pt-1 sm:pt-0">
                         <Button
-                          variant={finishedDestinationKeys.has(getEntryKey(dest, day, index)) ? 'secondary' : 'outline'}
+                          variant="default"
                           size="sm"
                           onClick={(event) => {
                             event.stopPropagation();
                             toggleFinished(getEntryKey(dest, day, index));
                           }}
-                          className="flex-shrink-0 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm"
+                          className={`flex-shrink-0 text-white transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm ${
+                            finishedDestinationKeys.has(getEntryKey(dest, day, index))
+                              ? 'bg-emerald-600 hover:bg-emerald-700'
+                              : 'bg-blue-600 hover:bg-blue-700'
+                          }`}
                         >
                           {finishedDestinationKeys.has(getEntryKey(dest, day, index)) ? 'Finished' : 'Finish'}
                         </Button>
@@ -1055,18 +1158,40 @@ export function ItineraryView({
 
       <Dialog
         open={isCompletionDialogOpen}
-        onOpenChange={setIsCompletionDialogOpen}
+        onOpenChange={(nextOpen) => {
+          if (nextOpen) {
+            setIsCompletionDialogOpen(true);
+            return;
+          }
+          if (activeCompletedDay !== null) {
+            setRatingUnlockedDays((prev) => new Set(prev).add(activeCompletedDay));
+          }
+          setPendingCompletedDays((prev) => prev.slice(1));
+          setActiveCompletedDay(null);
+          setIsCompletionDialogOpen(false);
+        }}
       >
         <DialogContent className="sm:max-w-md p-5">
           <DialogHeader>
-            <DialogTitle>Itinerary Completed</DialogTitle>
+            <DialogTitle>Day {activeCompletedDay ?? ''} Completed</DialogTitle>
             <DialogDescription>
-              Great job! You have finished all destinations in this itinerary.
+              Great job! You have finished all destinations for Day {activeCompletedDay ?? ''}.
+              Please rate your experience for each destination below.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button onClick={() => setIsCompletionDialogOpen(false)} size="sm">
-              Awesome
+            <Button
+              onClick={() => {
+                if (activeCompletedDay !== null) {
+                  setRatingUnlockedDays((prev) => new Set(prev).add(activeCompletedDay));
+                }
+                setPendingCompletedDays((prev) => prev.slice(1));
+                setActiveCompletedDay(null);
+                setIsCompletionDialogOpen(false);
+              }}
+              size="sm"
+            >
+              Rate Day {activeCompletedDay ?? ''}
             </Button>
           </DialogFooter>
         </DialogContent>

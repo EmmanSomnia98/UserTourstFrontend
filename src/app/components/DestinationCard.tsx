@@ -11,6 +11,7 @@ interface DestinationCardProps {
   destination: Destination;
   onAddToItinerary?: (destination: Destination) => void;
   isInItinerary?: boolean;
+  showAggregateRating?: boolean;
   showRecommendationScore?: boolean;
   recommendationScore?: number;
   onShowBreakdown?: (destination: Destination) => void;
@@ -23,6 +24,7 @@ export function DestinationCard({
   destination,
   onAddToItinerary,
   isInItinerary = false,
+  showAggregateRating = true,
   showRecommendationScore = false,
   recommendationScore,
   onShowBreakdown,
@@ -72,11 +74,13 @@ export function DestinationCard({
         <div className="space-y-2">
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-semibold text-base sm:text-lg">{destination.name}</h3>
-            <div className="flex items-center gap-1 text-sm flex-shrink-0">
-              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-              <span className="font-medium">{destination.rating}</span>
-              <span className="hidden sm:inline text-gray-500">({destination.reviewCount})</span>
-            </div>
+            {showAggregateRating && (
+              <div className="flex items-center gap-1 text-sm flex-shrink-0">
+                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                <span className="font-medium">{destination.rating}</span>
+                <span className="hidden sm:inline text-gray-500">({destination.reviewCount})</span>
+              </div>
+            )}
           </div>
           
           <p className="text-sm text-gray-600 line-clamp-2">{destination.description}</p>

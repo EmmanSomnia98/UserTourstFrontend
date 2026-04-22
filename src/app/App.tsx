@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from 'react';
 import { Destination, UserPreferences } from '@/app/types/destination';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
+import type { SavedItineraryProgress } from '@/app/types/saved-itinerary';
 import { fetchDestinations } from '@/app/api/destinations';
 import { fetchServerRecommendations } from '@/app/api/recommendations';
 import type { RecommendationBudgetSummary } from '@/app/api/recommendations';
@@ -54,6 +55,40 @@ type PreferencePreset = {
   budget?: number;
   duration?: number;
 };
+
+const SAVED_ITINERARY_PROGRESS_STORAGE_KEY = 'bw_saved_itinerary_progress_v1';
+
+function readSavedItineraryProgress(): Record<string, SavedItineraryProgress> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(SAVED_ITINERARY_PROGRESS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, SavedItineraryProgress> | null;
+    if (!parsed || typeof parsed !== 'object') return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function writeSavedItineraryProgress(items: Record<string, SavedItineraryProgress>) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(SAVED_ITINERARY_PROGRESS_STORAGE_KEY, JSON.stringify(items));
+  } catch {
+    // Ignore storage write failures (private mode/quota exceeded).
+  }
+}
+
+function attachSavedProgress(savedItinerary: SavedItinerary): SavedItinerary {
+  const allProgress = readSavedItineraryProgress();
+  const progress = allProgress[savedItinerary.id];
+  if (!progress) return savedItinerary;
+  return {
+    ...savedItinerary,
+    progress,
+  };
+}
 
 export default function App() {
   const isMobile = useIsMobile();
@@ -148,16 +183,6 @@ export default function App() {
   useEffect(() => {
     void flushFeedbackQueue();
   }, [currentUser?.id, currentUser?.email]);
-
-  useEffect(() => {
-    if (currentView !== 'preferences' || !authSuccessMessage) return;
-    const timer = window.setTimeout(() => {
-      setAuthSuccessMessage(null);
-    }, 4000);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [currentView, authSuccessMessage]);
 
   useEffect(() => {
     if (allDestinations.length === 0) {
@@ -516,26 +541,48 @@ export default function App() {
   };
 
   const hydrateSavedItineraryState = (savedItinerary: SavedItinerary) => {
+    const itineraryWithProgress = attachSavedProgress(savedItinerary);
     trackEvent('saved_itinerary_viewed', {
-      itineraryId: savedItinerary.id,
+      itineraryId: itineraryWithProgress.id,
       metadata: {
-        destinationCount: savedItinerary.destinations.length,
-        totalCost: savedItinerary.totalCost,
-        tripDays: savedItinerary.tripDays,
+        destinationCount: itineraryWithProgress.destinations.length,
+        totalCost: itineraryWithProgress.totalCost,
+        tripDays: itineraryWithProgress.tripDays,
       },
     });
-    setViewingSavedItinerary(savedItinerary);
-    setItinerary(savedItinerary.destinations);
+    setViewingSavedItinerary(itineraryWithProgress);
+    setItinerary(itineraryWithProgress.destinations);
     setLastRecommendationRequestId(null);
     setLastRecommendationModelVersion(null);
     setLastRecommendationAlgorithm(null);
     setLastRecommendationBudget(null);
     setPreferences({ 
-      duration: savedItinerary.tripDays,
-      budget: savedItinerary.totalCost,
+      duration: itineraryWithProgress.tripDays,
+      budget: itineraryWithProgress.totalCost,
       activityLevel: 'moderate' as const,
       interests: [],
       subInterests: [],
+    });
+  };
+
+  const handleSavedItineraryProgressChange = (progress: SavedItineraryProgress) => {
+    setViewingSavedItinerary((prev) => {
+      if (!prev) return prev;
+      const current = prev.progress;
+      const sameFinished =
+        (current?.finishedEntryKeys ?? []).join('|') === progress.finishedEntryKeys.join('|');
+      const sameUnlocked =
+        (current?.ratingUnlockedDays ?? []).join('|') === progress.ratingUnlockedDays.join('|');
+      if (sameFinished && sameUnlocked) return prev;
+
+      const allProgress = readSavedItineraryProgress();
+      allProgress[prev.id] = progress;
+      writeSavedItineraryProgress(allProgress);
+
+      return {
+        ...prev,
+        progress,
+      };
     });
   };
 
@@ -899,6 +946,27 @@ export default function App() {
       )}
 
       <Dialog
+        open={Boolean(authSuccessMessage)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setAuthSuccessMessage(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Success</DialogTitle>
+            <DialogDescription>
+              {authSuccessMessage}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setAuthSuccessMessage(null)}>
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
         open={isLogoutDialogOpen}
         onOpenChange={(nextOpen) => {
           if (logoutStep === 'confirm') {
@@ -1196,21 +1264,6 @@ export default function App() {
 
         {currentView === 'preferences' && (
           <div className="py-8 space-y-4">
-            {authSuccessMessage && (
-              <div className="mx-auto w-full max-w-3xl rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                <div className="flex items-center justify-between gap-3">
-                  <span>{authSuccessMessage}</span>
-                  <button
-                    type="button"
-                    className="shrink-0 font-semibold text-emerald-900 transition hover:text-emerald-700"
-                    onClick={() => setAuthSuccessMessage(null)}
-                    aria-label="Dismiss success message"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            )}
             <PreferenceForm
               onSubmit={async (prefs) => {
                 setPreferencePreset(null);
@@ -1229,11 +1282,9 @@ export default function App() {
             preferences={preferences}
             itinerary={itinerary}
             onAddToItinerary={handleAddToItinerary}
-            onRateDestination={isAuthenticated ? handleRateDestination : undefined}
             onViewItinerary={handleViewItinerary}
             onRestart={handleReset}
             recommendationScores={recommendationScores}
-            destinationRatings={destinationRatings}
             userLocation={userLocation}
           />
         )}
@@ -1243,6 +1294,9 @@ export default function App() {
             destinations={itinerary}
             allDestinations={allDestinations}
             tripDays={preferences.duration}
+            isSavedItinerary={Boolean(viewingSavedItinerary)}
+            savedItineraryId={viewingSavedItinerary?.id}
+            savedProgress={viewingSavedItinerary?.progress}
             userInterests={preferences.interests}
             interestRanks={preferences.interestRanks}
             recommendationAlgorithm={lastRecommendationAlgorithm}
@@ -1253,6 +1307,7 @@ export default function App() {
             onViewSavedItineraries={() => setCurrentView('saved-itineraries')}
             onSaveSuccess={handleItinerarySaved}
             onRateDestination={isAuthenticated ? handleRateDestination : undefined}
+            onSavedProgressChange={handleSavedItineraryProgressChange}
             destinationRatings={destinationRatings}
             userLocation={userLocation}
           />
@@ -1274,8 +1329,6 @@ export default function App() {
             destinations={allDestinations}
             status={destinationsStatus}
             userLocation={userLocation}
-            onRateDestination={isAuthenticated ? handleRateDestination : undefined}
-            destinationRatings={destinationRatings}
             onBack={() => setCurrentView('welcome')}
           />
         )}
@@ -1286,8 +1339,6 @@ export default function App() {
             allDestinations={allDestinations}
             currentUserId={currentUser?.id}
             userLocation={userLocation}
-            onRateDestination={isAuthenticated ? handleRateDestination : undefined}
-            destinationRatings={destinationRatings}
             onBack={() => setCurrentView('saved-itineraries')}
             onItineraryChange={handleSharedItineraryChange}
             onSaveChangesSuccess={(savedItinerary) => {
