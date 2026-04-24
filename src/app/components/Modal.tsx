@@ -1,5 +1,4 @@
 import { type ReactNode, useEffect } from 'react';
-import { X } from 'lucide-react';
 import { motion } from 'motion/react';
 
 import { Button } from '@/app/components/ui/button';
@@ -46,14 +45,11 @@ export function Modal({ open, onClose, title, description, content, actions = []
           transition={{ duration: 0.2, ease: 'easeOut' }}
           className="max-h-[85vh] overflow-y-auto"
         >
-          <div className="flex items-start justify-between border-b border-slate-100 px-6 pb-4 pt-6">
+          <div className="border-b border-slate-100 px-6 pb-4 pt-6">
             <DialogHeader className="text-left">
               <DialogTitle className="text-2xl text-slate-900">{title}</DialogTitle>
               {description ? <DialogDescription className="text-sm text-slate-600">{description}</DialogDescription> : null}
             </DialogHeader>
-            <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close modal">
-              <X className="h-4 w-4" />
-            </Button>
           </div>
 
           <div className="space-y-5 px-6 py-5">{content}</div>

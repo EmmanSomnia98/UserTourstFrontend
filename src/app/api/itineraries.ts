@@ -79,6 +79,11 @@ type BackendItinerary = {
   number_of_days?: number;
   itineraryDays?: number;
   itinerary_days?: number;
+  selectedDates?: unknown;
+  selected_dates?: unknown;
+  tripDates?: unknown;
+  trip_dates?: unknown;
+  dates?: unknown;
   totalCost?: number;
   totalDuration?: number;
   durationHours?: number;
@@ -409,12 +414,33 @@ function mapBackendItinerary(itinerary: BackendItinerary, index: number): SavedI
     normalizeItineraryId(itinerary.id) ??
     normalizeItineraryId(itinerary._id) ??
     `itinerary-${index}`;
+  const normalizeIsoDateStrings = (value: unknown): string[] => {
+    if (!Array.isArray(value)) return [];
+    const valid = value
+      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .filter(Boolean)
+      .filter((item) => Number.isFinite(Date.parse(item)));
+    return Array.from(new Set(valid)).sort((a, b) => Date.parse(a) - Date.parse(b));
+  };
+  const selectedDateCandidates = [
+    itinerary.selectedDates,
+    itinerary.selected_dates,
+    itinerary.tripDates,
+    itinerary.trip_dates,
+    itinerary.dates,
+  ];
+  const selectedDates =
+    selectedDateCandidates
+      .map(normalizeIsoDateStrings)
+      .find((dates) => dates.length > 0) ?? [];
+  const normalizedSelectedDates = selectedDates.length > 0 ? selectedDates : undefined;
   return {
     id: normalizedId,
     name: itinerary.name?.trim() || `Itinerary ${index + 1}`,
     destinations,
     // Prefer explicit backend day fields when present.
     tripDays: backendTripDays > 0 ? backendTripDays : inferredTripDays,
+    selectedDates: normalizedSelectedDates,
     createdAt,
     totalCost: Number(itinerary.totalCost ?? 0),
     totalDuration,
@@ -423,9 +449,11 @@ function mapBackendItinerary(itinerary: BackendItinerary, index: number): SavedI
 
 function buildContentSignature(itinerary: SavedItinerary): string {
   const destinationIds = itinerary.destinations.map((item) => item.id).join(',');
+  const selectedDates = (itinerary.selectedDates ?? []).join(',');
   return [
     itinerary.name.trim().toLowerCase(),
     itinerary.tripDays,
+    selectedDates,
     Math.round(itinerary.totalCost),
     destinationIds,
   ].join('|');
@@ -613,6 +641,11 @@ export async function createItinerary(itinerary: SavedItinerary): Promise<SavedI
     number_of_days: itinerary.tripDays,
     itineraryDays: itinerary.tripDays,
     itinerary_days: itinerary.tripDays,
+    selectedDates: itinerary.selectedDates ?? [],
+    selected_dates: itinerary.selectedDates ?? [],
+    tripDates: itinerary.selectedDates ?? [],
+    trip_dates: itinerary.selectedDates ?? [],
+    dates: itinerary.selectedDates ?? [],
     totalDuration: itinerary.totalDuration,
     durationHours: itinerary.totalDuration,
     destinations: payloadDestinations,
@@ -673,6 +706,8 @@ export async function updateItinerary(id: string, itinerary: SavedItinerary): Pr
     name: itinerary.name,
     tripDays: itinerary.tripDays,
     days: itinerary.tripDays,
+    selectedDates: itinerary.selectedDates ?? [],
+    selected_dates: itinerary.selectedDates ?? [],
     destinationIds,
   };
 

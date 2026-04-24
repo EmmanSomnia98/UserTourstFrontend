@@ -10,6 +10,7 @@ export interface SavedItinerary {
   name: string;
   destinations: Destination[];
   tripDays: number;
+  selectedDates?: string[];
   createdAt: string;
   totalCost: number;
   totalDuration: number;

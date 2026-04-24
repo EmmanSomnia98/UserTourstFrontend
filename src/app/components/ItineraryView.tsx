@@ -28,11 +28,13 @@ import { formatPeso } from '@/app/utils/currency';
 import { toUserFacingErrorMessage } from '@/app/utils/user-facing-error';
 import { buildGoogleMapsRouteUrl, getDaySegmentDistances } from '@/app/utils/google-maps';
 import type { PDFImage } from 'pdf-lib';
+import { addDays, format, isValid, parseISO, startOfDay } from 'date-fns';
 
 interface ItineraryViewProps {
   destinations: Destination[];
   allDestinations: Destination[];
   tripDays: number;
+  selectedDates?: string[];
   isSavedItinerary?: boolean;
   savedItineraryId?: string;
   savedProgress?: SavedItineraryProgress;
@@ -55,6 +57,7 @@ export function ItineraryView({
   destinations,
   allDestinations,
   tripDays,
+  selectedDates = [],
   isSavedItinerary = false,
   savedItineraryId,
   savedProgress,
@@ -123,6 +126,38 @@ export function ItineraryView({
   const remainingBudget = recommendationBudget?.remainingBudget;
   const utilizationPct = recommendationBudget?.utilizationPct;
   const showBudgetSummary = Number.isFinite(maxBudget) && (maxBudget as number) > 0;
+  const effectiveSelectedDates = (() => {
+    const targetDays = Math.max(1, tripDays);
+    const normalizedDates = selectedDates
+      .map((dateIso) => parseISO(dateIso))
+      .filter((date) => isValid(date))
+      .sort((a, b) => a.getTime() - b.getTime())
+      .map((date) => startOfDay(date));
+
+    const dedupedDates: Date[] = [];
+    const seen = new Set<string>();
+    normalizedDates.forEach((date) => {
+      const key = format(date, 'yyyy-MM-dd');
+      if (seen.has(key)) return;
+      seen.add(key);
+      dedupedDates.push(date);
+    });
+
+    if (dedupedDates.length >= targetDays) {
+      return dedupedDates.slice(0, targetDays).map((date) => date.toISOString());
+    }
+
+    const startDate = dedupedDates.length > 0 ? dedupedDates[0] : startOfDay(new Date());
+    const filledDates = Array.from({ length: targetDays }, (_, index) => addDays(startDate, index));
+    return filledDates.map((date) => date.toISOString());
+  })();
+  const getDayDateLabel = (day: number): string | null => {
+    const dateIso = effectiveSelectedDates[day - 1];
+    if (!dateIso) return null;
+    const parsed = parseISO(dateIso);
+    if (!isValid(parsed)) return null;
+    return format(parsed, 'MMMM d, yyyy');
+  };
   const isDayFinished = (day: number) => {
     const dayDestinations = schedule.get(day) ?? [];
     if (dayDestinations.length === 0) return false;
@@ -272,6 +307,7 @@ export function ItineraryView({
         name: itineraryName,
         destinations,
         tripDays,
+        selectedDates: effectiveSelectedDates,
         createdAt: new Date().toISOString(),
         totalCost,
         totalDuration
@@ -806,10 +842,13 @@ export function ItineraryView({
                 <div className="w-12 h-12 bg-blue-500 text-white rounded-full flex items-center justify-center font-semibold">
                   {day}
                 </div>
-                <div>
-                  <h3 className="font-semibold text-lg">Day {day}</h3>
+                  <div>
+                    <h3 className="font-semibold text-lg">Day {day}</h3>
+                    {getDayDateLabel(day) && (
+                      <p className="text-sm text-slate-600">{getDayDateLabel(day)}</p>
+                    )}
+                  </div>
                 </div>
-              </div>
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="outline"
@@ -1173,7 +1212,12 @@ export function ItineraryView({
       >
         <DialogContent className="sm:max-w-md p-5">
           <DialogHeader>
-            <DialogTitle>Day {activeCompletedDay ?? ''} Completed</DialogTitle>
+            <DialogTitle>
+              Day {activeCompletedDay ?? ''} Completed
+              {activeCompletedDay !== null && getDayDateLabel(activeCompletedDay)
+                ? ` (${getDayDateLabel(activeCompletedDay)})`
+                : ''}
+            </DialogTitle>
             <DialogDescription>
               Great job! You have finished all destinations for Day {activeCompletedDay ?? ''}.
               Please rate your experience for each destination below.

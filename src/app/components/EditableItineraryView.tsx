@@ -20,6 +20,7 @@ import { useItineraryCollaboration } from '@/app/hooks/use-itinerary-collaborati
 import { GeoPoint } from '@/app/utils/travel';
 import { buildGoogleMapsRouteUrl, getDaySegmentDistances } from '@/app/utils/google-maps';
 import { toUserFacingErrorMessage } from '@/app/utils/user-facing-error';
+import { addDays, format, isValid, parseISO, startOfDay } from 'date-fns';
 
 interface EditableItineraryViewProps {
   savedItinerary: SavedItinerary;
@@ -265,6 +266,40 @@ export function EditableItineraryView({
       .filter(Boolean);
   };
 
+  const effectiveSelectedDates = (() => {
+    const targetDays = Math.max(1, tripDays);
+    const normalizedDates = (savedItinerary.selectedDates ?? [])
+      .map((dateIso) => parseISO(dateIso))
+      .filter((date) => isValid(date))
+      .sort((a, b) => a.getTime() - b.getTime())
+      .map((date) => startOfDay(date));
+
+    const dedupedDates: Date[] = [];
+    const seen = new Set<string>();
+    normalizedDates.forEach((date) => {
+      const key = format(date, 'yyyy-MM-dd');
+      if (seen.has(key)) return;
+      seen.add(key);
+      dedupedDates.push(date);
+    });
+
+    if (dedupedDates.length >= targetDays) {
+      return dedupedDates.slice(0, targetDays).map((date) => date.toISOString());
+    }
+
+    const startDate = dedupedDates.length > 0 ? dedupedDates[0] : startOfDay(new Date());
+    const filledDates = Array.from({ length: targetDays }, (_, index) => addDays(startDate, index));
+    return filledDates.map((date) => date.toISOString());
+  })();
+
+  const getDayDateLabel = (day: number): string | null => {
+    const dateIso = effectiveSelectedDates[day - 1];
+    if (!dateIso) return null;
+    const parsed = parseISO(dateIso);
+    if (!isValid(parsed)) return null;
+    return format(parsed, 'MMMM d, yyyy');
+  };
+
   return (
     <div className="space-y-6">
       {/* Header with editable name */}
@@ -453,6 +488,9 @@ export function EditableItineraryView({
                   </div>
                   <div>
                     <h3 className="font-semibold text-lg">Day {day}</h3>
+                    {getDayDateLabel(day) && (
+                      <p className="text-sm text-slate-600">{getDayDateLabel(day)}</p>
+                    )}
                   </div>
                 </div>
                 <Button

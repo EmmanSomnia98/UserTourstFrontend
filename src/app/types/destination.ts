@@ -38,6 +38,7 @@ export interface UserPreferences {
   timePreference?: 'day_only' | 'night_only' | 'whole_day';
   budget: number; // Changed from 'low' | 'medium' | 'high' to number
   duration: number; // days
+  selectedDates?: string[]; // ISO date strings
   collaborators?: string[];
   collaboratorIds?: string[];
 }

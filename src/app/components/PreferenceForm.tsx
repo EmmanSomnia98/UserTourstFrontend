@@ -1,16 +1,20 @@
-import { type ComponentType, useEffect, useState } from 'react';
+import { type ComponentType, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
 import { Checkbox } from '@/app/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { Label } from '@/app/components/ui/label';
 import { Input } from '@/app/components/ui/input';
+import { Calendar } from '@/app/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/app/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { UserPreferences } from '@/app/types/destination';
 import { GeoPoint } from '@/app/utils/travel';
 import { toUserFacingErrorMessage } from '@/app/utils/user-facing-error';
 import { clearRecentLocationGrant, getRecentLocationGrant, setRecentLocationGrant } from '@/app/utils/location-access';
 import { fetchInterestsSchema, InterestSchemaMainInterest } from '@/app/api/destinations';
-import { Mountain, Waves, Heart, Compass, ChevronDown, ChevronUp, Sun, LucideBook, Ship, Camera, LocateFixed } from 'lucide-react';
+import { addDays, addMonths, format, getMonth, getYear, isValid, setMonth, setYear, startOfDay, startOfMonth } from 'date-fns';
+import { Mountain, Waves, Heart, Compass, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Sun, LucideBook, Ship, Camera, LocateFixed, CalendarDays } from 'lucide-react';
 
 interface PreferenceFormProps {
   onSubmit: (preferences: UserPreferences) => void | Promise<void>;
@@ -128,6 +132,32 @@ const interestIcons: Record<string, ComponentType<{ className?: string }>> = {
   leisure: Heart,
 };
 
+const MIN_TRIP_DURATION = 1;
+const MAX_TRIP_DURATION = 30;
+const MONTH_LABELS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] as const;
+
+const normalizeSelectedDates = (dates: Date[]): Date[] => {
+  const normalizedEntries = dates
+    .map((date) => startOfDay(date))
+    .filter((date) => isValid(date))
+    .map((date) => ({ key: format(date, 'yyyy-MM-dd'), date }));
+
+  const deduped = new Map<string, Date>();
+  for (const entry of normalizedEntries) {
+    deduped.set(entry.key, entry.date);
+  }
+
+  return Array.from(deduped.values()).sort((a, b) => a.getTime() - b.getTime());
+};
+
+const buildConsecutiveDates = (startDate: Date, count: number): Date[] => {
+  const normalizedStart = startOfDay(startDate);
+  return Array.from({ length: count }, (_, index) => addDays(normalizedStart, index));
+};
+
+const dateToBackendIso = (date: Date): string =>
+  new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())).toISOString();
+
 export function PreferenceForm({ onSubmit, onLocationChange, initialPreset }: PreferenceFormProps) {
   const [interestOptionsWithSubs, setInterestOptionsWithSubs] = useState<InterestSchemaMainInterest[]>(fallbackInterestOptions);
   const [isUsingFallbackSchema, setIsUsingFallbackSchema] = useState<boolean>(true);
@@ -138,6 +168,9 @@ export function PreferenceForm({ onSubmit, onLocationChange, initialPreset }: Pr
   const [activityLevel, setActivityLevel] = useState<'relaxed' | 'moderate' | 'active'>('moderate');
   const [budget, setBudget] = useState<string>('1000');
   const [duration, setDuration] = useState<string>('');
+  const [selectedDates, setSelectedDates] = useState<Date[]>([]);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState<Date>(startOfMonth(new Date()));
   const [showInterestError, setShowInterestError] = useState(false);
   const [showSubInterestError, setShowSubInterestError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -244,9 +277,93 @@ export function PreferenceForm({ onSubmit, onLocationChange, initialPreset }: Pr
       setBudget(String(Math.round(initialPreset.budget)));
     }
     if (typeof initialPreset.duration === 'number' && Number.isFinite(initialPreset.duration) && initialPreset.duration > 0) {
-      setDuration(String(Math.round(initialPreset.duration)));
+      const presetDuration = Math.min(MAX_TRIP_DURATION, Math.max(MIN_TRIP_DURATION, Math.round(initialPreset.duration)));
+      const baseDate = startOfDay(new Date());
+      const presetDates = buildConsecutiveDates(baseDate, presetDuration);
+      setDuration(String(presetDuration));
+      setSelectedDates(presetDates);
+      setCalendarMonth(startOfMonth(baseDate));
     }
   }, [initialPreset]);
+
+  const availableYears = useMemo(() => {
+    const thisYear = new Date().getFullYear();
+    return Array.from({ length: 11 }, (_, index) => thisYear - 1 + index);
+  }, []);
+  const today = startOfDay(new Date());
+
+  const updateDurationFromDates = (dates: Date[]) => {
+    const nextDuration = Math.min(MAX_TRIP_DURATION, dates.length);
+    setDuration(nextDuration > 0 ? String(nextDuration) : '');
+  };
+
+  const handleDurationChange = (value: string) => {
+    if (!value.trim()) {
+      setDuration('');
+      setSelectedDates([]);
+      return;
+    }
+
+    const parsedDuration = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsedDuration)) {
+      setDuration(value);
+      setSelectedDates([]);
+      return;
+    }
+    if (parsedDuration < MIN_TRIP_DURATION) {
+      setDuration(value);
+      setSelectedDates([]);
+      return;
+    }
+
+    const clampedDuration = Math.min(MAX_TRIP_DURATION, parsedDuration);
+    const firstSelectedDate = selectedDates.length > 0 ? startOfDay(selectedDates[0]) : null;
+    const startDate = firstSelectedDate && firstSelectedDate.getTime() >= today.getTime() ? firstSelectedDate : today;
+    const nextDates = buildConsecutiveDates(startDate, clampedDuration);
+
+    setDuration(String(clampedDuration));
+    setSelectedDates(nextDates);
+    setCalendarMonth(startOfMonth(startDate));
+  };
+
+  const handleCalendarDateSelect = (dates: Date[] | undefined) => {
+    const normalizedDates = normalizeSelectedDates(dates ?? [])
+      .filter((date) => date.getTime() >= today.getTime())
+      .slice(0, MAX_TRIP_DURATION);
+    setSelectedDates(normalizedDates);
+    updateDurationFromDates(normalizedDates);
+    if (normalizedDates.length > 0) {
+      setCalendarMonth(startOfMonth(normalizedDates[0]));
+    }
+  };
+
+  const handleDatePickerOpenChange = (open: boolean) => {
+    setIsDatePickerOpen(open);
+    if (!open) return;
+    if (selectedDates.length > 0) {
+      setCalendarMonth(startOfMonth(selectedDates[0]));
+    }
+  };
+
+  const handleCalendarMonthBack = () => {
+    setCalendarMonth((prev) => startOfMonth(addMonths(prev, -1)));
+  };
+
+  const handleCalendarMonthForward = () => {
+    setCalendarMonth((prev) => startOfMonth(addMonths(prev, 1)));
+  };
+
+  const handleCalendarMonthSelect = (monthValue: string) => {
+    const nextMonth = Number.parseInt(monthValue, 10);
+    if (!Number.isFinite(nextMonth)) return;
+    setCalendarMonth((prev) => startOfMonth(setMonth(prev, nextMonth)));
+  };
+
+  const handleCalendarYearSelect = (yearValue: string) => {
+    const nextYear = Number.parseInt(yearValue, 10);
+    if (!Number.isFinite(nextYear)) return;
+    setCalendarMonth((prev) => startOfMonth(setYear(prev, nextYear)));
+  };
 
   const toggleInterest = (interest: string) => {
     const isCurrentlySelected = interests.includes(interest);
@@ -343,11 +460,17 @@ export function PreferenceForm({ onSubmit, onLocationChange, initialPreset }: Pr
       ? (parseInt(budget) || 1000)
       : preferenceBudgetFallback;
     const durationNum = parseInt(duration, 10);
-    if (!Number.isFinite(durationNum) || durationNum < 1 || durationNum > 30) {
-      setSubmitError('Please enter a trip duration between 1 and 30 days.');
+    if (!Number.isFinite(durationNum) || durationNum < MIN_TRIP_DURATION || durationNum > MAX_TRIP_DURATION) {
+      setSubmitError(`Please enter a trip duration between ${MIN_TRIP_DURATION} and ${MAX_TRIP_DURATION} days.`);
       setIsSubmitting(false);
       return;
     }
+    const normalizedSelectedDatesForSubmit = normalizeSelectedDates(
+      selectedDates.length > 0
+        ? selectedDates
+        : buildConsecutiveDates(startOfDay(new Date()), durationNum)
+    );
+    const submittedDateIsos = normalizedSelectedDatesForSubmit.map(dateToBackendIso);
 
     try {
       const autoRankedMainInterests = mainInterestOrder
@@ -374,6 +497,7 @@ export function PreferenceForm({ onSubmit, onLocationChange, initialPreset }: Pr
         timePreference: 'whole_day',
         budget: budgetNum,
         duration: durationNum,
+        selectedDates: submittedDateIsos,
       });
     } catch (error) {
       console.error('Failed to submit preferences:', error);
@@ -679,20 +803,98 @@ export function PreferenceForm({ onSubmit, onLocationChange, initialPreset }: Pr
         {/* Duration Input */}
         <div className="space-y-4">
           <Label htmlFor="duration" className="text-lg">Trip Duration (days)</Label>
-          <div className="space-y-2">
+          <div className="space-y-3">
             <Input
               id="duration"
               type="number"
-              min="1"
-              max="30"
+              min={MIN_TRIP_DURATION}
+              max={MAX_TRIP_DURATION}
               value={duration}
-              onChange={(e) => setDuration(e.target.value)}
+              onChange={(e) => handleDurationChange(e.target.value)}
               placeholder="Enter number of days"
               className="text-lg transition-colors hover:border-slate-400 focus-visible:ring-blue-200"
             />
             <p className="text-sm text-gray-600">
               How many days will you be staying in Bulusan?
             </p>
+            <Popover open={isDatePickerOpen} onOpenChange={handleDatePickerOpenChange}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 w-auto min-w-[220px] justify-start gap-2 border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  {selectedDates.length > 0 ? `${selectedDates.length} day${selectedDates.length > 1 ? 's' : ''} selected` : 'Choose your trip dates'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" sideOffset={8} className="w-auto rounded-xl border border-slate-200 p-3 shadow-xl">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-md"
+                    onClick={handleCalendarMonthBack}
+                    aria-label="Previous month"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Select value={String(getMonth(calendarMonth))} onValueChange={handleCalendarMonthSelect}>
+                      <SelectTrigger className="h-8 w-[132px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MONTH_LABELS.map((label, index) => (
+                          <SelectItem key={label} value={String(index)}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={String(getYear(calendarMonth))} onValueChange={handleCalendarYearSelect}>
+                      <SelectTrigger className="h-8 w-[96px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableYears.map((year) => (
+                          <SelectItem key={year} value={String(year)}>
+                            {year}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-md"
+                    onClick={handleCalendarMonthForward}
+                    aria-label="Next month"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Calendar
+                  mode="multiple"
+                  month={calendarMonth}
+                  onMonthChange={(month) => setCalendarMonth(startOfMonth(month))}
+                  selected={selectedDates}
+                  onSelect={handleCalendarDateSelect}
+                  disabled={{ before: today }}
+                  numberOfMonths={1}
+                  className="w-auto p-0"
+                  classNames={{
+                    months: 'flex flex-col',
+                    month: 'flex flex-col gap-2',
+                    caption: 'hidden',
+                    nav: 'hidden',
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
 

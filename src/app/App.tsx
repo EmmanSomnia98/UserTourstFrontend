@@ -558,6 +558,7 @@ export default function App() {
     setLastRecommendationBudget(null);
     setPreferences({ 
       duration: itineraryWithProgress.tripDays,
+      selectedDates: itineraryWithProgress.selectedDates,
       budget: itineraryWithProgress.totalCost,
       activityLevel: 'moderate' as const,
       interests: [],
@@ -596,6 +597,7 @@ export default function App() {
     setItinerary(savedItinerary.destinations);
     setPreferences((prev) => ({
       duration: savedItinerary.tripDays,
+      selectedDates: savedItinerary.selectedDates,
       budget: savedItinerary.totalCost,
       activityLevel: prev?.activityLevel ?? 'moderate',
       interests: prev?.interests ?? [],
@@ -1294,6 +1296,7 @@ export default function App() {
             destinations={itinerary}
             allDestinations={allDestinations}
             tripDays={preferences.duration}
+            selectedDates={preferences.selectedDates}
             isSavedItinerary={Boolean(viewingSavedItinerary)}
             savedItineraryId={viewingSavedItinerary?.id}
             savedProgress={viewingSavedItinerary?.progress}
