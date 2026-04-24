@@ -1,6 +1,7 @@
 import { apiDelete, apiGet, apiPatch, apiPost, clearAuthSession, getAuthToken, resolveAssetUrl } from '@/app/api/client';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
 import { Destination } from '@/app/types/destination';
+import type { ItineraryStop } from '@/app/types/saved-itinerary';
 
 type BackendItineraryDestination = {
   destination?: (Destination & {
@@ -89,6 +90,8 @@ type BackendItinerary = {
   durationHours?: number;
   maxBudget?: number;
   destinations?: BackendItineraryDestination[];
+  stops?: unknown;
+  schedule?: unknown;
 };
 
 type ItineraryPayload =
@@ -402,6 +405,87 @@ function isSafeRemoteItineraryId(id: string): boolean {
   return true;
 }
 
+function isValidTimeLabel(value: string): boolean {
+  return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
+}
+
+function normalizeStops(value: unknown): ItineraryStop[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const raw = item as Record<string, unknown>;
+      const destinationId =
+        normalizeIdentifier(raw.destinationId) ??
+        normalizeIdentifier(raw.destination_id) ??
+        normalizeIdentifier(raw.destination);
+      const day = toNumber(raw.day);
+      const sequence =
+        toNumber(raw.sequence) ??
+        toNumber(raw.order) ??
+        toNumber(raw.index);
+      const startTimeRaw =
+        typeof raw.startTime === 'string'
+          ? raw.startTime.trim()
+          : typeof raw.start_time === 'string'
+            ? raw.start_time.trim()
+            : '';
+      const endTimeRaw =
+        typeof raw.endTime === 'string'
+          ? raw.endTime.trim()
+          : typeof raw.end_time === 'string'
+            ? raw.end_time.trim()
+            : '';
+
+      if (!destinationId || day === null || sequence === null) return null;
+      if (!isValidTimeLabel(startTimeRaw) || !isValidTimeLabel(endTimeRaw)) return null;
+      const normalizedSequence = Math.round(sequence);
+      // Backend contract is 1-based. Keep internal UI model 0-based.
+      const sequenceZeroBased = normalizedSequence >= 1 ? normalizedSequence - 1 : normalizedSequence;
+
+      return {
+        destinationId,
+        day: Math.max(1, Math.round(day)),
+        sequence: Math.max(0, sequenceZeroBased),
+        startTime: startTimeRaw,
+        endTime: endTimeRaw,
+      } as ItineraryStop;
+    })
+    .filter((stop): stop is ItineraryStop => Boolean(stop))
+    .sort((a, b) => {
+      if (a.day !== b.day) return a.day - b.day;
+      return a.sequence - b.sequence;
+    });
+}
+
+function normalizeOutgoingStops(stops: ItineraryStop[] | undefined): ItineraryStop[] {
+  if (!Array.isArray(stops)) return [];
+  return stops
+    .map((stop) => {
+      const destinationId = normalizeIdentifier(stop.destinationId);
+      if (!destinationId) return null;
+      const day = Math.max(1, Math.round(Number(stop.day) || 0));
+      const sequence = Math.max(0, Math.round(Number(stop.sequence) || 0));
+      const startTime = typeof stop.startTime === 'string' ? stop.startTime.trim() : '';
+      const endTime = typeof stop.endTime === 'string' ? stop.endTime.trim() : '';
+      if (!isValidTimeLabel(startTime) || !isValidTimeLabel(endTime)) return null;
+      return {
+        destinationId,
+        day,
+        // Backend contract expects 1-based sequence
+        sequence: sequence + 1,
+        startTime,
+        endTime,
+      } as ItineraryStop;
+    })
+    .filter((stop): stop is ItineraryStop => Boolean(stop))
+    .sort((a, b) => {
+      if (a.day !== b.day) return a.day - b.day;
+      return a.sequence - b.sequence;
+    });
+}
+
 function mapBackendItinerary(itinerary: BackendItinerary, index: number): SavedItinerary {
   const destinations = toDestinationList(itinerary.destinations);
   const durationFromDestinations = destinations.reduce((sum, dest) => sum + Number(dest.duration || 0), 0);
@@ -434,10 +518,13 @@ function mapBackendItinerary(itinerary: BackendItinerary, index: number): SavedI
       .map(normalizeIsoDateStrings)
       .find((dates) => dates.length > 0) ?? [];
   const normalizedSelectedDates = selectedDates.length > 0 ? selectedDates : undefined;
+  const stops = normalizeStops(itinerary.stops ?? itinerary.schedule);
+  const normalizedStops = stops.length > 0 ? stops : undefined;
   return {
     id: normalizedId,
     name: itinerary.name?.trim() || `Itinerary ${index + 1}`,
     destinations,
+    stops: normalizedStops,
     // Prefer explicit backend day fields when present.
     tripDays: backendTripDays > 0 ? backendTripDays : inferredTripDays,
     selectedDates: normalizedSelectedDates,
@@ -450,12 +537,16 @@ function mapBackendItinerary(itinerary: BackendItinerary, index: number): SavedI
 function buildContentSignature(itinerary: SavedItinerary): string {
   const destinationIds = itinerary.destinations.map((item) => item.id).join(',');
   const selectedDates = (itinerary.selectedDates ?? []).join(',');
+  const stopsSignature = normalizeOutgoingStops(itinerary.stops)
+    .map((stop) => `${stop.destinationId}:${stop.day}:${stop.sequence}:${stop.startTime}-${stop.endTime}`)
+    .join(',');
   return [
     itinerary.name.trim().toLowerCase(),
     itinerary.tripDays,
     selectedDates,
     Math.round(itinerary.totalCost),
     destinationIds,
+    stopsSignature,
   ].join('|');
 }
 
@@ -608,16 +699,9 @@ export async function createItinerary(itinerary: SavedItinerary): Promise<SavedI
     .map((destination) => {
       const destinationId = normalizeIdentifier(destination.id);
       if (!destinationId) return null;
-      const durationHours =
-        (typeof destination.durationHours === 'number' && Number.isFinite(destination.durationHours) && destination.durationHours > 0
-          ? destination.durationHours
-          : destination.duration);
       return {
         destination: destinationId,
-        destinationId,
         cost: destination.estimatedCost,
-        duration: durationHours,
-        durationHours,
       };
     })
     .filter((value): value is NonNullable<typeof value> => Boolean(value));
@@ -625,29 +709,15 @@ export async function createItinerary(itinerary: SavedItinerary): Promise<SavedI
   if (itinerary.destinations.length > 0 && payloadDestinations.length === 0) {
     throw new Error('Unable to save itinerary: destination IDs are missing.');
   }
+  const payloadStops = normalizeOutgoingStops(itinerary.stops);
 
   const payload = {
     name: itinerary.name,
     totalCost: itinerary.totalCost,
     maxBudget: itinerary.totalCost,
-    tripDays: itinerary.tripDays,
     days: itinerary.tripDays,
-    duration: itinerary.tripDays,
-    tripDuration: itinerary.tripDays,
-    trip_duration: itinerary.tripDays,
-    totalDays: itinerary.tripDays,
-    durationDays: itinerary.tripDays,
-    numberOfDays: itinerary.tripDays,
-    number_of_days: itinerary.tripDays,
-    itineraryDays: itinerary.tripDays,
-    itinerary_days: itinerary.tripDays,
     selectedDates: itinerary.selectedDates ?? [],
-    selected_dates: itinerary.selectedDates ?? [],
-    tripDates: itinerary.selectedDates ?? [],
-    trip_dates: itinerary.selectedDates ?? [],
-    dates: itinerary.selectedDates ?? [],
-    totalDuration: itinerary.totalDuration,
-    durationHours: itinerary.totalDuration,
+    stops: payloadStops,
     destinations: payloadDestinations,
   };
 
@@ -701,14 +771,13 @@ export async function updateItinerary(id: string, itinerary: SavedItinerary): Pr
   if (itinerary.destinations.length > 0 && destinationIds.length === 0) {
     throw new Error('Unable to update itinerary: destination IDs are missing.');
   }
+  const payloadStops = normalizeOutgoingStops(itinerary.stops);
 
   const payload = {
     name: itinerary.name,
     tripDays: itinerary.tripDays,
-    days: itinerary.tripDays,
-    selectedDates: itinerary.selectedDates ?? [],
-    selected_dates: itinerary.selectedDates ?? [],
     destinationIds,
+    stops: payloadStops,
   };
 
   try {

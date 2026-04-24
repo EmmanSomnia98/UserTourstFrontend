@@ -21,12 +21,13 @@ import { Calendar, Trash2, Download, Wallet, Star, Map as MapIcon, Clock3 } from
 import { calculateItinerarySchedule, getDestinationStayHours } from '@/app/utils/recommendation';
 import { formatInterestList } from '@/app/utils/interests';
 import { SavedItinerary } from '@/app/types/saved-itinerary';
-import type { SavedItineraryProgress } from '@/app/types/saved-itinerary';
+import type { ItineraryStop, SavedItineraryProgress } from '@/app/types/saved-itinerary';
 import { createItinerary } from '@/app/api/itineraries';
 import type { RecommendationBudgetSummary } from '@/app/api/recommendations';
 import { formatPeso } from '@/app/utils/currency';
 import { toUserFacingErrorMessage } from '@/app/utils/user-facing-error';
 import { buildGoogleMapsRouteUrl, getDaySegmentDistances } from '@/app/utils/google-maps';
+import { buildDayTimeline } from '@/app/utils/itinerary-timeline';
 import type { PDFImage } from 'pdf-lib';
 import { addDays, format, isValid, parseISO, startOfDay } from 'date-fns';
 
@@ -75,6 +76,64 @@ export function ItineraryView({
   destinationRatings,
   userLocation
 }: ItineraryViewProps) {
+  const toStopKey = (day: number, sequence: number, destinationId: string) => `${day}-${sequence}-${destinationId}`;
+  const minutesToTimeInput = (minutesFromMidnight: number) => {
+    const normalized = ((Math.round(minutesFromMidnight) % 1440) + 1440) % 1440;
+    const hours = Math.floor(normalized / 60).toString().padStart(2, '0');
+    const minutes = (normalized % 60).toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+  const sanitizeStopTime = (value: string): string => {
+    const trimmed = value.trim();
+    return /^([01]\d|2[0-3]):([0-5]\d)$/.test(trimmed) ? trimmed : '';
+  };
+  const buildComputedStops = (scheduleMap: Map<number, Destination[]>): ItineraryStop[] => {
+    const computed: ItineraryStop[] = [];
+    Array.from(scheduleMap.entries()).forEach(([day, dayDestinations]) => {
+      const timeline = buildDayTimeline(dayDestinations, { day });
+      dayDestinations.forEach((destination, sequence) => {
+        const slot = timeline[sequence];
+        if (!slot) return;
+        computed.push({
+          destinationId: destination.id,
+          day,
+          sequence,
+          startTime: minutesToTimeInput(slot.startMinutes),
+          endTime: minutesToTimeInput(slot.endMinutes),
+        });
+      });
+    });
+    return computed;
+  };
+  const upsertStop = (
+    stops: ItineraryStop[],
+    day: number,
+    sequence: number,
+    destinationId: string,
+    patch: Partial<Pick<ItineraryStop, 'startTime' | 'endTime'>>
+  ): ItineraryStop[] => {
+    const key = toStopKey(day, sequence, destinationId);
+    const next = [...stops];
+    const idx = next.findIndex((stop) => toStopKey(stop.day, stop.sequence, stop.destinationId) === key);
+    if (idx < 0) {
+      next.push({
+        destinationId,
+        day,
+        sequence,
+        startTime: sanitizeStopTime(patch.startTime ?? ''),
+        endTime: sanitizeStopTime(patch.endTime ?? ''),
+      });
+      return next;
+    }
+    const current = next[idx];
+    next[idx] = {
+      ...current,
+      startTime: patch.startTime !== undefined ? sanitizeStopTime(patch.startTime) : current.startTime,
+      endTime: patch.endTime !== undefined ? sanitizeStopTime(patch.endTime) : current.endTime,
+    };
+    return next;
+  };
+
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
@@ -88,6 +147,7 @@ export function ItineraryView({
   const [finishedDestinationKeys, setFinishedDestinationKeys] = useState<Set<string>>(
     () => new Set(savedProgress?.finishedEntryKeys ?? [])
   );
+  const [stops, setStops] = useState<ItineraryStop[]>([]);
   const [expandedAddDay, setExpandedAddDay] = useState<number | null>(null);
   const saveRequestInFlight = useRef(false);
   const prevCompletedDaysRef = useRef<Set<number>>(new Set());
@@ -112,6 +172,7 @@ export function ItineraryView({
   const itineraryEntryKeys = Array.from(schedule.entries()).flatMap(([day, dayDestinations]) =>
     dayDestinations.map((destination, index) => getEntryKey(destination, day, index))
   );
+  const itineraryEntrySignature = itineraryEntryKeys.join('|');
   const availableDestinations = allDestinations.filter(
     (candidate) => !destinations.some((selected) => selected.id === candidate.id)
   );
@@ -165,6 +226,36 @@ export function ItineraryView({
       finishedDestinationKeys.has(getEntryKey(destination, day, index))
     );
   };
+
+  useEffect(() => {
+    const computedDefaults = buildComputedStops(schedule);
+    const validKeys = new Set(computedDefaults.map((stop) => toStopKey(stop.day, stop.sequence, stop.destinationId)));
+
+    setStops((previous) => {
+      const existingByKey = new Map<string, ItineraryStop>();
+      previous.forEach((stop) => {
+        const key = toStopKey(stop.day, stop.sequence, stop.destinationId);
+        if (!validKeys.has(key)) return;
+        existingByKey.set(key, {
+          ...stop,
+          startTime: sanitizeStopTime(stop.startTime),
+          endTime: sanitizeStopTime(stop.endTime),
+        });
+      });
+
+      return computedDefaults.map((stop) => {
+        const key = toStopKey(stop.day, stop.sequence, stop.destinationId);
+        const existing = existingByKey.get(key);
+        return existing
+          ? {
+              ...stop,
+              startTime: existing.startTime || stop.startTime,
+              endTime: existing.endTime || stop.endTime,
+            }
+          : stop;
+      });
+    });
+  }, [itineraryEntrySignature]);
 
   useEffect(() => {
     const validKeys = new Set(itineraryEntryKeys);
@@ -302,10 +393,17 @@ export function ItineraryView({
     setIsSaving(true);
     setSaveError(null);
     try {
+      const normalizedStops = [...stops]
+        .filter((stop) => stop.destinationId && stop.startTime && stop.endTime)
+        .sort((a, b) => {
+          if (a.day !== b.day) return a.day - b.day;
+          return a.sequence - b.sequence;
+        });
       const newItinerary = {
         id: `itinerary_${Date.now()}`,
         name: itineraryName,
         destinations,
+        stops: normalizedStops,
         tripDays,
         selectedDates: effectiveSelectedDates,
         createdAt: new Date().toISOString(),
@@ -835,6 +933,14 @@ export function ItineraryView({
           {(() => {
             const dayRouteUrl = buildGoogleMapsRouteUrl(dayDestinations, { origin: userLocation });
             const daySegments = getDaySegmentDistances(dayDestinations);
+            const dayTimeline = buildDayTimeline(dayDestinations, { day, stops });
+            const getStopForEntry = (destinationId: string, sequence: number) =>
+              stops.find(
+                (stop) =>
+                  stop.day === day &&
+                  stop.sequence === sequence &&
+                  stop.destinationId === destinationId
+              );
             return (
           <div className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -926,6 +1032,15 @@ export function ItineraryView({
               {dayDestinations.map((dest, index) => (
                 <div key={dest.id ?? `${dest.name}-${day}-${index}`} className="relative">
                   {(() => {
+                    const slot = dayTimeline[index];
+                    if (!slot?.transferLabel) return null;
+                    return (
+                      <div className="mb-2 rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                        {slot.transferLabel}
+                      </div>
+                    );
+                  })()}
+                  {(() => {
                     const entryKey = getEntryKey(dest, day, index);
                     const isFinished = finishedDestinationKeys.has(entryKey);
                     return (
@@ -970,7 +1085,47 @@ export function ItineraryView({
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
                               <h4 className="font-semibold">{dest.name}</h4>
+                              {dayTimeline[index]?.timeRangeLabel && (
+                                <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700">
+                                  {dayTimeline[index].timeRangeLabel}
+                                </span>
+                              )}
                             </div>
+                            {(() => {
+                              const stop = getStopForEntry(dest.id, index);
+                              if (!stop) return null;
+                              if (isSavedItinerary) return null;
+                              return (
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                                  <span className="font-medium text-slate-700">Time:</span>
+                                  <Input
+                                    type="time"
+                                    value={stop.startTime}
+                                    className="h-8 w-32"
+                                    onClick={(event) => event.stopPropagation()}
+                                    onChange={(event) => {
+                                      const nextValue = sanitizeStopTime(event.target.value);
+                                      setStops((previous) =>
+                                        upsertStop(previous, day, index, dest.id, { startTime: nextValue })
+                                      );
+                                    }}
+                                  />
+                                  <span>-</span>
+                                  <Input
+                                    type="time"
+                                    value={stop.endTime}
+                                    className="h-8 w-32"
+                                    onClick={(event) => event.stopPropagation()}
+                                    onChange={(event) => {
+                                      const nextValue = sanitizeStopTime(event.target.value);
+                                      setStops((previous) =>
+                                        upsertStop(previous, day, index, dest.id, { endTime: nextValue })
+                                      );
+                                    }}
+                                  />
+                                </div>
+                              );
+                            })()}
                             <p className="text-sm text-gray-600 line-clamp-2">{dest.description}</p>
                           </div>
                           {(() => {

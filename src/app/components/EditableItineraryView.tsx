@@ -5,6 +5,7 @@ import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Separator } from '@/app/components/ui/separator';
+import { Input } from '@/app/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { DestinationLocationPanel } from '@/app/components/DestinationLocationPanel';
@@ -19,8 +20,10 @@ import { inviteCollaboratorToItinerary } from '@/app/api/collaboration';
 import { useItineraryCollaboration } from '@/app/hooks/use-itinerary-collaboration';
 import { GeoPoint } from '@/app/utils/travel';
 import { buildGoogleMapsRouteUrl, getDaySegmentDistances } from '@/app/utils/google-maps';
+import { buildDayTimeline } from '@/app/utils/itinerary-timeline';
 import { toUserFacingErrorMessage } from '@/app/utils/user-facing-error';
 import { addDays, format, isValid, parseISO, startOfDay } from 'date-fns';
+import type { ItineraryStop } from '@/app/types/saved-itinerary';
 
 interface EditableItineraryViewProps {
   savedItinerary: SavedItinerary;
@@ -49,7 +52,66 @@ export function EditableItineraryView({
   onSaveChangesSuccess,
   onDeleteSuccess
 }: EditableItineraryViewProps) {
+  const toStopKey = (day: number, sequence: number, destinationId: string) => `${day}-${sequence}-${destinationId}`;
+  const minutesToTimeInput = (minutesFromMidnight: number) => {
+    const normalized = ((Math.round(minutesFromMidnight) % 1440) + 1440) % 1440;
+    const hours = Math.floor(normalized / 60).toString().padStart(2, '0');
+    const minutes = (normalized % 60).toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+  const sanitizeStopTime = (value: string): string => {
+    const trimmed = value.trim();
+    return /^([01]\d|2[0-3]):([0-5]\d)$/.test(trimmed) ? trimmed : '';
+  };
+  const buildComputedStops = (scheduleMap: Map<number, Destination[]>): ItineraryStop[] => {
+    const computed: ItineraryStop[] = [];
+    Array.from(scheduleMap.entries()).forEach(([day, dayDestinations]) => {
+      const timeline = buildDayTimeline(dayDestinations, { day });
+      dayDestinations.forEach((destination, sequence) => {
+        const slot = timeline[sequence];
+        if (!slot) return;
+        computed.push({
+          destinationId: destination.id,
+          day,
+          sequence,
+          startTime: minutesToTimeInput(slot.startMinutes),
+          endTime: minutesToTimeInput(slot.endMinutes),
+        });
+      });
+    });
+    return computed;
+  };
+  const upsertStop = (
+    source: ItineraryStop[],
+    day: number,
+    sequence: number,
+    destinationId: string,
+    patch: Partial<Pick<ItineraryStop, 'startTime' | 'endTime'>>
+  ): ItineraryStop[] => {
+    const key = toStopKey(day, sequence, destinationId);
+    const next = [...source];
+    const idx = next.findIndex((stop) => toStopKey(stop.day, stop.sequence, stop.destinationId) === key);
+    if (idx < 0) {
+      next.push({
+        destinationId,
+        day,
+        sequence,
+        startTime: sanitizeStopTime(patch.startTime ?? ''),
+        endTime: sanitizeStopTime(patch.endTime ?? ''),
+      });
+      return next;
+    }
+    const current = next[idx];
+    next[idx] = {
+      ...current,
+      startTime: patch.startTime !== undefined ? sanitizeStopTime(patch.startTime) : current.startTime,
+      endTime: patch.endTime !== undefined ? sanitizeStopTime(patch.endTime) : current.endTime,
+    };
+    return next;
+  };
+
   const [destinations, setDestinations] = useState<Destination[]>(savedItinerary.destinations);
+  const [stops, setStops] = useState<ItineraryStop[]>(savedItinerary.stops ?? []);
   const [tripDays, setTripDays] = useState(savedItinerary.tripDays);
   const [isEditingName, setIsEditingName] = useState(false);
   const [itineraryName, setItineraryName] = useState(savedItinerary.name);
@@ -72,6 +134,11 @@ export function EditableItineraryView({
   }, [allDestinations]);
 
   const schedule = calculateItinerarySchedule(destinations, tripDays);
+  const itineraryEntrySignature = Array.from(schedule.entries())
+    .flatMap(([day, dayDestinations]) =>
+      dayDestinations.map((destination, sequence) => toStopKey(day, sequence, destination.id))
+    )
+    .join('|');
   const totalCost = destinations.reduce((sum, dest) => sum + dest.estimatedCost, 0);
   const totalDuration = destinations.reduce((sum, dest) => sum + getDestinationStayHours(dest), 0);
   // Get destinations not already in itinerary
@@ -117,6 +184,7 @@ export function EditableItineraryView({
         name: resolvedName,
         tripDays: resolvedTripDays,
         destinations: resolvedDestinations,
+        stops,
         totalCost: nextTotalCost,
         totalDuration: nextTotalDuration,
       });
@@ -125,10 +193,39 @@ export function EditableItineraryView({
 
   useEffect(() => {
     setDestinations(savedItinerary.destinations);
+    setStops(savedItinerary.stops ?? []);
     setTripDays(savedItinerary.tripDays);
     setItineraryName(savedItinerary.name);
     setHasChanges(false);
   }, [savedItinerary]);
+
+  useEffect(() => {
+    const computedDefaults = buildComputedStops(schedule);
+    const validKeys = new Set(computedDefaults.map((stop) => toStopKey(stop.day, stop.sequence, stop.destinationId)));
+    setStops((previous) => {
+      const existingByKey = new Map<string, ItineraryStop>();
+      previous.forEach((stop) => {
+        const key = toStopKey(stop.day, stop.sequence, stop.destinationId);
+        if (!validKeys.has(key)) return;
+        existingByKey.set(key, {
+          ...stop,
+          startTime: sanitizeStopTime(stop.startTime),
+          endTime: sanitizeStopTime(stop.endTime),
+        });
+      });
+      return computedDefaults.map((stop) => {
+        const key = toStopKey(stop.day, stop.sequence, stop.destinationId);
+        const existing = existingByKey.get(key);
+        return existing
+          ? {
+              ...stop,
+              startTime: existing.startTime || stop.startTime,
+              endTime: existing.endTime || stop.endTime,
+            }
+          : stop;
+      });
+    });
+  }, [itineraryEntrySignature]);
 
   const handleRemoveDestination = (destinationId: string) => {
     let removed = false;
@@ -193,6 +290,7 @@ export function EditableItineraryView({
         ...savedItinerary,
         name: itineraryName.trim() || savedItinerary.name,
         destinations,
+        stops,
         tripDays,
         totalCost,
         totalDuration,
@@ -479,6 +577,14 @@ export function EditableItineraryView({
             {(() => {
               const dayRouteUrl = buildGoogleMapsRouteUrl(dayDestinations, { origin: userLocation });
               const daySegments = getDaySegmentDistances(dayDestinations);
+              const dayTimeline = buildDayTimeline(dayDestinations, { day, stops });
+              const getStopForEntry = (destinationId: string, sequence: number) =>
+                stops.find(
+                  (stop) =>
+                    stop.day === day &&
+                    stop.sequence === sequence &&
+                    stop.destinationId === destinationId
+                );
               return (
             <div className="space-y-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -531,6 +637,15 @@ export function EditableItineraryView({
                 )}
                 {dayDestinations.map((dest, index) => (
                   <div key={dest.id ?? `${dest.name}-${day}-${index}`} className="relative">
+                    {(() => {
+                      const slot = dayTimeline[index];
+                      if (!slot?.transferLabel) return null;
+                      return (
+                        <div className="mb-2 rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                          {slot.transferLabel}
+                        </div>
+                      );
+                    })()}
                     <div className="absolute -left-8 top-4 w-4 h-4 bg-white border-2 border-blue-500 rounded-full"></div>
                     
                     <Card
@@ -557,7 +672,48 @@ export function EditableItineraryView({
                             <div>
                               <div className="flex flex-wrap items-center gap-2">
                                 <h4 className="break-words font-semibold">{dest.name}</h4>
+                                {dayTimeline[index]?.timeRangeLabel && (
+                                  <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700">
+                                    {dayTimeline[index].timeRangeLabel}
+                                  </span>
+                                )}
                               </div>
+                              {(() => {
+                                const stop = getStopForEntry(dest.id, index);
+                                if (!stop) return null;
+                                return (
+                                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                                    <span className="font-medium text-slate-700">Time:</span>
+                                    <Input
+                                      type="time"
+                                      value={stop.startTime}
+                                      className="h-8 w-32"
+                                      onClick={(event) => event.stopPropagation()}
+                                      onChange={(event) => {
+                                        const nextValue = sanitizeStopTime(event.target.value);
+                                        setStops((previous) =>
+                                          upsertStop(previous, day, index, dest.id, { startTime: nextValue })
+                                        );
+                                        setHasChanges(true);
+                                      }}
+                                    />
+                                    <span>-</span>
+                                    <Input
+                                      type="time"
+                                      value={stop.endTime}
+                                      className="h-8 w-32"
+                                      onClick={(event) => event.stopPropagation()}
+                                      onChange={(event) => {
+                                        const nextValue = sanitizeStopTime(event.target.value);
+                                        setStops((previous) =>
+                                          upsertStop(previous, day, index, dest.id, { endTime: nextValue })
+                                        );
+                                        setHasChanges(true);
+                                      }}
+                                    />
+                                  </div>
+                                );
+                              })()}
                               <p className="line-clamp-2 break-words text-sm text-gray-600">{dest.description}</p>
                             </div>
                             {(() => {
