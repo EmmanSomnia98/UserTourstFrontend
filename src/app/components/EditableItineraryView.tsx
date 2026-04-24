@@ -11,6 +11,7 @@ import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { DestinationLocationPanel } from '@/app/components/DestinationLocationPanel';
 import { DestinationImageGallery } from '@/app/components/DestinationImageGallery';
 import { ZoomableImage } from '@/app/components/ZoomableImage';
+import { ItineraryDestinationCard } from '@/app/components/ItineraryDestinationCard';
 import { Calendar, Trash2, Plus, Save, X, Edit2, Wallet, Star, Map as MapIcon } from 'lucide-react';
 import { calculateItinerarySchedule, getDestinationStayHours } from '@/app/utils/recommendation';
 import { formatInterestList } from '@/app/utils/interests';
@@ -251,10 +252,13 @@ export function EditableItineraryView({
   };
 
   const handleSaveName = () => {
-    if (itineraryName.trim()) {
+    const trimmedName = itineraryName.trim();
+    if (trimmedName) {
       setIsEditingName(false);
-      setHasChanges(true);
-      publishEdit({ name: itineraryName.trim() });
+      if (trimmedName !== savedItinerary.name.trim()) {
+        setHasChanges(true);
+      }
+      publishEdit({ name: trimmedName });
     }
   };
 
@@ -410,7 +414,17 @@ export function EditableItineraryView({
                   <input
                     type="text"
                     value={itineraryName}
-                    onChange={(e) => setItineraryName(e.target.value)}
+                    onChange={(e) => {
+                      const nextName = e.target.value;
+                      setItineraryName(nextName);
+                      const trimmedNext = nextName.trim();
+                      const trimmedCurrent = savedItinerary.name.trim();
+                      setHasChanges(
+                        trimmedNext.length > 0
+                          ? trimmedNext !== trimmedCurrent
+                          : trimmedCurrent.length > 0
+                      );
+                    }}
                     className="text-2xl font-semibold border-b-2 border-blue-500 focus:outline-none flex-1"
                     autoFocus
                     onKeyDown={(e) => {
@@ -635,164 +649,72 @@ export function EditableItineraryView({
                     No activities scheduled for this day yet.
                   </div>
                 )}
-                {dayDestinations.map((dest, index) => (
-                  <div key={dest.id ?? `${dest.name}-${day}-${index}`} className="relative">
-                    {(() => {
-                      const slot = dayTimeline[index];
-                      if (!slot?.transferLabel) return null;
-                      return (
-                        <div className="mb-2 rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                          {slot.transferLabel}
-                        </div>
-                      );
-                    })()}
-                    <div className="absolute -left-8 top-4 w-4 h-4 bg-white border-2 border-blue-500 rounded-full"></div>
-                    
-                    <Card
-                      className="group p-4 cursor-pointer transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedDestination(dest)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          setSelectedDestination(dest);
-                        }
-                      }}
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:gap-4">
-                          <ZoomableImage
-                            src={dest.image}
-                            alt={dest.name}
-                            className="w-full sm:w-24 sm:flex-shrink-0"
-                            imageClassName="h-36 w-full rounded-lg object-cover transition-transform duration-300 group-hover:scale-105 sm:h-24 sm:w-24"
-                          />
-                          <div className="min-w-0 flex-1 space-y-2">
-                            <div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <h4 className="break-words font-semibold">{dest.name}</h4>
-                                {dayTimeline[index]?.timeRangeLabel && (
-                                  <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700">
-                                    {dayTimeline[index].timeRangeLabel}
-                                  </span>
-                                )}
-                              </div>
-                              {(() => {
-                                const stop = getStopForEntry(dest.id, index);
-                                if (!stop) return null;
+                {dayDestinations.map((dest, index) => {
+                  const stop = getStopForEntry(dest.id, index);
+                  const subInterestLabels = formatInterestList(dest.subInterests);
+                  return (
+                    <div key={dest.id ?? `${dest.name}-${day}-${index}`} className="relative">
+                      <div className="absolute -left-8 top-4 h-4 w-4 rounded-full border-2 border-blue-500 bg-white"></div>
+                      <ItineraryDestinationCard
+                        destination={dest}
+                        timeLabel={dayTimeline[index]?.timeRangeLabel ?? null}
+                        transferLabel={dayTimeline[index]?.transferLabel ?? null}
+                        priceLabel={formatPeso(dest.estimatedCost)}
+                        durationLabel={`${Math.round(getDestinationStayHours(dest) * 10) / 10}h`}
+                        tags={subInterestLabels}
+                        origin={userLocation}
+                        onEdit={() => setSelectedDestination(dest)}
+                        onDelete={() => handleRemoveDestination(dest.id)}
+                        startTime={stop.startTime}
+                        endTime={stop.endTime}
+                        canEditTimes
+                        onStartTimeChange={(value) => {
+                          const nextValue = sanitizeStopTime(value);
+                          setStops((previous) =>
+                            upsertStop(previous, day, index, dest.id, { startTime: nextValue })
+                          );
+                          setHasChanges(true);
+                        }}
+                        onEndTimeChange={(value) => {
+                          const nextValue = sanitizeStopTime(value);
+                          setStops((previous) =>
+                            upsertStop(previous, day, index, dest.id, { endTime: nextValue })
+                          );
+                          setHasChanges(true);
+                        }}
+                        extraContent={onRateDestination ? (
+                          <div className="space-y-1">
+                            <p className="text-xs font-medium text-slate-600">Your rating</p>
+                            <div className="flex items-center gap-1">
+                              {Array.from({ length: 5 }, (_, starIndex) => {
+                                const value = starIndex + 1;
+                                const active = value <= (destinationRatings?.[dest.id] ?? 0);
                                 return (
-                                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                                    <span className="font-medium text-slate-700">Time:</span>
-                                    <Input
-                                      type="time"
-                                      value={stop.startTime}
-                                      className="h-8 w-32"
-                                      onClick={(event) => event.stopPropagation()}
-                                      onChange={(event) => {
-                                        const nextValue = sanitizeStopTime(event.target.value);
-                                        setStops((previous) =>
-                                          upsertStop(previous, day, index, dest.id, { startTime: nextValue })
-                                        );
-                                        setHasChanges(true);
-                                      }}
-                                    />
-                                    <span>-</span>
-                                    <Input
-                                      type="time"
-                                      value={stop.endTime}
-                                      className="h-8 w-32"
-                                      onClick={(event) => event.stopPropagation()}
-                                      onChange={(event) => {
-                                        const nextValue = sanitizeStopTime(event.target.value);
-                                        setStops((previous) =>
-                                          upsertStop(previous, day, index, dest.id, { endTime: nextValue })
-                                        );
-                                        setHasChanges(true);
-                                      }}
-                                    />
-                                  </div>
+                                  <button
+                                    key={`${dest.id}-edit-rate-${value}`}
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      onRateDestination(dest, value);
+                                    }}
+                                    className="rounded-sm p-0.5 transition hover:scale-110"
+                                    aria-label={`Rate ${dest.name} ${value} star${value > 1 ? 's' : ''}`}
+                                    title={`Rate ${value} star${value > 1 ? 's' : ''}`}
+                                  >
+                                    <Star className={`h-4 w-4 ${active ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
+                                  </button>
                                 );
-                              })()}
-                              <p className="line-clamp-2 break-words text-sm text-gray-600">{dest.description}</p>
+                              })}
+                              <span className="ml-1 text-xs text-slate-500">
+                                {destinationRatings?.[dest.id] ? `${destinationRatings[dest.id]}/5` : 'Not rated'}
+                              </span>
                             </div>
-                            {(() => {
-                              const subInterestLabels = formatInterestList(dest.subInterests);
-                              if (subInterestLabels.length === 0) return null;
-                              return (
-                                <p className="text-xs text-slate-600">
-                                  <span className="font-medium text-slate-700">Sub-interests:</span>{' '}
-                                  {subInterestLabels.join(', ')}
-                                </p>
-                              );
-                            })()}
-                            
-                            <div className="flex flex-wrap gap-2">
-                              <Badge variant="secondary" className="text-xs">
-                                {dest.type}
-                              </Badge>
-                              <Badge variant="outline" className="text-xs">
-                                {dest.difficulty}
-                              </Badge>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-                              <div className="flex flex-wrap items-center gap-1">
-                                <Wallet className="w-4 h-4" />
-                                <span>{formatPeso(dest.estimatedCost)}</span>
-                              </div>
-                            </div>
-                          <TravelModeBadges destination={dest} origin={userLocation} />
-                          <DestinationLocationPanel destination={dest} />
-                          {onRateDestination && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-slate-600">Your rating</p>
-                              <div className="flex items-center gap-1">
-                                {Array.from({ length: 5 }, (_, starIndex) => {
-                                  const value = starIndex + 1;
-                                  const active = value <= (destinationRatings?.[dest.id] ?? 0);
-                                  return (
-                                    <button
-                                      key={`${dest.id}-edit-rate-${value}`}
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        onRateDestination(dest, value);
-                                      }}
-                                      className="rounded-sm p-0.5 transition hover:scale-110"
-                                      aria-label={`Rate ${dest.name} ${value} star${value > 1 ? 's' : ''}`}
-                                      title={`Rate ${value} star${value > 1 ? 's' : ''}`}
-                                    >
-                                      <Star className={`h-4 w-4 ${active ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
-                                    </button>
-                                  );
-                                })}
-                                <span className="ml-1 text-xs text-slate-500">
-                                  {destinationRatings?.[dest.id] ? `${destinationRatings[dest.id]}/5` : 'Not rated'}
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                        <div className="flex justify-end sm:block">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleRemoveDestination(dest.id);
-                            }}
-                            className="flex-shrink-0 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:bg-red-50"
-                          >
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  </div>
-                ))}
+                          </div>
+                        ) : null}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
               );

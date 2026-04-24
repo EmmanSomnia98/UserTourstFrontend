@@ -68,6 +68,9 @@ type BackendItinerary = {
   _id?: string;
   id?: string;
   name?: string;
+  itineraryName?: string;
+  itinerary_name?: string;
+  title?: string;
   createdAt?: string;
   tripDays?: number;
   duration?: number;
@@ -520,9 +523,15 @@ function mapBackendItinerary(itinerary: BackendItinerary, index: number): SavedI
   const normalizedSelectedDates = selectedDates.length > 0 ? selectedDates : undefined;
   const stops = normalizeStops(itinerary.stops ?? itinerary.schedule);
   const normalizedStops = stops.length > 0 ? stops : undefined;
+  const normalizedName =
+    itinerary.name?.trim() ||
+    itinerary.itineraryName?.trim() ||
+    itinerary.itinerary_name?.trim() ||
+    itinerary.title?.trim() ||
+    `Itinerary ${index + 1}`;
   return {
     id: normalizedId,
-    name: itinerary.name?.trim() || `Itinerary ${index + 1}`,
+    name: normalizedName,
     destinations,
     stops: normalizedStops,
     // Prefer explicit backend day fields when present.
@@ -713,12 +722,16 @@ export async function createItinerary(itinerary: SavedItinerary): Promise<SavedI
 
   const payload = {
     name: itinerary.name,
+    itineraryName: itinerary.name,
+    title: itinerary.name,
     totalCost: itinerary.totalCost,
     maxBudget: itinerary.totalCost,
+    tripDays: itinerary.tripDays,
     days: itinerary.tripDays,
     selectedDates: itinerary.selectedDates ?? [],
     stops: payloadStops,
     destinations: payloadDestinations,
+    destinationIds: payloadDestinations.map((item) => item.destination),
   };
 
   const request = (async () => {
@@ -775,8 +788,12 @@ export async function updateItinerary(id: string, itinerary: SavedItinerary): Pr
 
   const payload = {
     name: itinerary.name,
+    itineraryName: itinerary.name,
+    title: itinerary.name,
     tripDays: itinerary.tripDays,
+    days: itinerary.tripDays,
     destinationIds,
+    destinations: destinationIds.map((destinationId) => ({ destination: destinationId })),
     stops: payloadStops,
   };
 

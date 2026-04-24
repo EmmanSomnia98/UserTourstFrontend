@@ -16,6 +16,7 @@ import { TravelModeBadges } from '@/app/components/TravelModeBadges';
 import { DestinationLocationPanel } from '@/app/components/DestinationLocationPanel';
 import { DestinationImageGallery } from '@/app/components/DestinationImageGallery';
 import { ZoomableImage } from '@/app/components/ZoomableImage';
+import { ItineraryDestinationCard } from '@/app/components/ItineraryDestinationCard';
 import { GeoPoint } from '@/app/utils/travel';
 import { Calendar, Trash2, Download, Wallet, Star, Map as MapIcon, Clock3 } from 'lucide-react';
 import { calculateItinerarySchedule, getDestinationStayHours } from '@/app/utils/recommendation';
@@ -1032,15 +1033,6 @@ export function ItineraryView({
               {dayDestinations.map((dest, index) => (
                 <div key={dest.id ?? `${dest.name}-${day}-${index}`} className="relative">
                   {(() => {
-                    const slot = dayTimeline[index];
-                    if (!slot?.transferLabel) return null;
-                    return (
-                      <div className="mb-2 rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                        {slot.transferLabel}
-                      </div>
-                    );
-                  })()}
-                  {(() => {
                     const entryKey = getEntryKey(dest, day, index);
                     const isFinished = finishedDestinationKeys.has(entryKey);
                     return (
@@ -1058,165 +1050,77 @@ export function ItineraryView({
                       </>
                     );
                   })()}
-                  
-                  <Card
-                    className={`group p-4 cursor-pointer transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md ${
-                      finishedDestinationKeys.has(getEntryKey(dest, day, index)) ? 'border-emerald-200 bg-emerald-50/30' : ''
-                    }`}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedDestination(dest)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        setSelectedDestination(dest);
-                      }
-                    }}
-                  >
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:gap-4 flex-1">
-                        <ZoomableImage
-                          src={dest.image}
-                          alt={dest.name}
-                          className="w-full sm:w-24 sm:flex-shrink-0"
-                          imageClassName="h-32 w-full rounded-lg object-cover transition-transform duration-300 group-hover:scale-105 sm:h-24 sm:w-24"
-                        />
-                        <div className="flex-1 space-y-2">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h4 className="font-semibold">{dest.name}</h4>
-                              {dayTimeline[index]?.timeRangeLabel && (
-                                <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700">
-                                  {dayTimeline[index].timeRangeLabel}
-                                </span>
-                              )}
-                            </div>
-                            {(() => {
-                              const stop = getStopForEntry(dest.id, index);
-                              if (!stop) return null;
-                              if (isSavedItinerary) return null;
-                              return (
-                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                                  <span className="font-medium text-slate-700">Time:</span>
-                                  <Input
-                                    type="time"
-                                    value={stop.startTime}
-                                    className="h-8 w-32"
-                                    onClick={(event) => event.stopPropagation()}
-                                    onChange={(event) => {
-                                      const nextValue = sanitizeStopTime(event.target.value);
-                                      setStops((previous) =>
-                                        upsertStop(previous, day, index, dest.id, { startTime: nextValue })
-                                      );
-                                    }}
-                                  />
-                                  <span>-</span>
-                                  <Input
-                                    type="time"
-                                    value={stop.endTime}
-                                    className="h-8 w-32"
-                                    onClick={(event) => event.stopPropagation()}
-                                    onChange={(event) => {
-                                      const nextValue = sanitizeStopTime(event.target.value);
-                                      setStops((previous) =>
-                                        upsertStop(previous, day, index, dest.id, { endTime: nextValue })
-                                      );
-                                    }}
-                                  />
-                                </div>
-                              );
-                            })()}
-                            <p className="text-sm text-gray-600 line-clamp-2">{dest.description}</p>
-                          </div>
-                          {(() => {
-                            const subInterestLabels = formatInterestList(dest.subInterests);
-                            if (subInterestLabels.length === 0) return null;
-                            return (
-                              <p className="text-xs text-slate-600">
-                                <span className="font-medium text-slate-700">Sub-interests:</span>{' '}
-                                {subInterestLabels.join(', ')}
-                              </p>
-                            );
-                          })()}
-                          
-                          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 pt-1">
+                  {(() => {
+                    const stop = getStopForEntry(dest.id, index);
+                    const durationHours = getDestinationDurationHours(dest);
+                    const subInterestLabels = formatInterestList(dest.subInterests);
+                    const showRating =
+                      Boolean(onRateDestination) &&
+                      isSavedItinerary &&
+                      ratingUnlockedDays.has(day) &&
+                      isDayFinished(day);
+                    return (
+                      <ItineraryDestinationCard
+                        destination={dest}
+                        timeLabel={dayTimeline[index]?.timeRangeLabel ?? null}
+                        transferLabel={dayTimeline[index]?.transferLabel ?? null}
+                        priceLabel={formatPeso(dest.estimatedCost)}
+                        durationLabel={durationHours !== null ? `${formatHours(durationHours)}h` : 'N/A'}
+                        tags={subInterestLabels}
+                        origin={userLocation}
+                        isFinished={finishedDestinationKeys.has(getEntryKey(dest, day, index))}
+                        onFinish={() => toggleFinished(getEntryKey(dest, day, index))}
+                        showFinishButton={isSavedItinerary}
+                        showActionsMenu={isSavedItinerary}
+                        onEdit={() => setSelectedDestination(dest)}
+                        onDelete={() => handleRemoveClick(dest.id, getEntryKey(dest, day, index))}
+                        startTime={stop?.startTime}
+                        endTime={stop?.endTime}
+                        canEditTimes={Boolean(stop)}
+                        onStartTimeChange={(value) => {
+                          const nextValue = sanitizeStopTime(value);
+                          setStops((previous) =>
+                            upsertStop(previous, day, index, dest.id, { startTime: nextValue })
+                          );
+                        }}
+                        onEndTimeChange={(value) => {
+                          const nextValue = sanitizeStopTime(value);
+                          setStops((previous) =>
+                            upsertStop(previous, day, index, dest.id, { endTime: nextValue })
+                          );
+                        }}
+                        footerContent={showRating ? (
+                          <div className="space-y-1">
+                            <p className="text-xs font-medium text-slate-600">Your rating</p>
                             <div className="flex items-center gap-1">
-                              <Wallet className="w-4 h-4" />
-                              <span>{formatPeso(dest.estimatedCost)}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Clock3 className="w-4 h-4" />
-                              <span>
-                                Average Visit Time: {getDestinationDurationHours(dest) !== null ? `${formatHours(getDestinationDurationHours(dest) as number)}h` : 'N/A'}
+                              {Array.from({ length: 5 }, (_, starIndex) => {
+                                const value = starIndex + 1;
+                                const active = value <= (destinationRatings?.[dest.id] ?? 0);
+                                return (
+                                  <button
+                                    key={`${dest.id}-itn-rate-${value}`}
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      onRateDestination?.(dest, value);
+                                    }}
+                                    className="rounded-sm p-0.5 transition hover:scale-110"
+                                    aria-label={`Rate ${dest.name} ${value} star${value > 1 ? 's' : ''}`}
+                                    title={`Rate ${value} star${value > 1 ? 's' : ''}`}
+                                  >
+                                    <Star className={`h-4 w-4 ${active ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
+                                  </button>
+                                );
+                              })}
+                              <span className="ml-1 text-xs text-slate-500">
+                                {destinationRatings?.[dest.id] ? `${destinationRatings[dest.id]}/5` : 'Not rated'}
                               </span>
                             </div>
                           </div>
-                          <div className="pt-1">
-                            <TravelModeBadges destination={dest} origin={userLocation} />
-                          </div>
-                          <DestinationLocationPanel destination={dest} />
-                          {onRateDestination && isSavedItinerary && ratingUnlockedDays.has(day) && isDayFinished(day) && (
-                            <div className="space-y-1">
-                              <p className="text-xs font-medium text-slate-600">Your rating</p>
-                              <div className="flex items-center gap-1">
-                                {Array.from({ length: 5 }, (_, starIndex) => {
-                                  const value = starIndex + 1;
-                                  const active = value <= (destinationRatings?.[dest.id] ?? 0);
-                                  return (
-                                    <button
-                                      key={`${dest.id}-itn-rate-${value}`}
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        onRateDestination(dest, value);
-                                      }}
-                                      className="rounded-sm p-0.5 transition hover:scale-110"
-                                      aria-label={`Rate ${dest.name} ${value} star${value > 1 ? 's' : ''}`}
-                                      title={`Rate ${value} star${value > 1 ? 's' : ''}`}
-                                    >
-                                      <Star className={`h-4 w-4 ${active ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
-                                    </button>
-                                  );
-                                })}
-                                <span className="ml-1 text-xs text-slate-500">
-                                  {destinationRatings?.[dest.id] ? `${destinationRatings[dest.id]}/5` : 'Not rated'}
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end gap-2 sm:block pt-1 sm:pt-0">
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            toggleFinished(getEntryKey(dest, day, index));
-                          }}
-                          className={`flex-shrink-0 text-white transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-sm ${
-                            finishedDestinationKeys.has(getEntryKey(dest, day, index))
-                              ? 'bg-emerald-600 hover:bg-emerald-700'
-                              : 'bg-blue-600 hover:bg-blue-700'
-                          }`}
-                        >
-                          {finishedDestinationKeys.has(getEntryKey(dest, day, index)) ? 'Finished' : 'Finish'}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleRemoveClick(dest.id, getEntryKey(dest, day, index));
-                          }}
-                          className="flex-shrink-0 transition-all duration-300 ease-out hover:-translate-y-0.5 hover:bg-red-50"
-                        >
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
+                        ) : null}
+                      />
+                    );
+                  })()}
                 </div>
               ))}
             </div>
@@ -1329,23 +1233,11 @@ export function ItineraryView({
           </DialogHeader>
           <DialogFooter>
             <Button
-              variant="outline"
               onClick={() => setSaveSuccess(false)}
               size="sm"
             >
-              Continue Planning
+              Confirm
             </Button>
-            {onViewSavedItineraries && (
-              <Button
-                onClick={() => {
-                  setSaveSuccess(false);
-                  onViewSavedItineraries();
-                }}
-                size="sm"
-              >
-                View My Itineraries
-              </Button>
-            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

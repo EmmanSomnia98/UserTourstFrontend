@@ -5,7 +5,7 @@ import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
 import { ZoomableImage } from '@/app/components/ZoomableImage';
-import { MapPin, Trash2, Edit, DollarSign, Eye, Clock3 } from 'lucide-react';
+import { MapPin, Trash2, Edit, Eye, Clock3, Wallet } from 'lucide-react';
 import { deleteRemoteItinerary, fetchItineraries } from '@/app/api/itineraries';
 import { formatPeso } from '@/app/utils/currency';
 import { toUserFacingErrorMessage } from '@/app/utils/user-facing-error';
@@ -201,7 +201,7 @@ export function SavedItinerariesView({
                     <span>{formatHours(itinerary.totalDuration)}h total duration</span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <DollarSign className="w-4 h-4" />
+                    <Wallet className="w-4 h-4" />
                     <span>{formatPeso(itinerary.totalCost)} total cost</span>
                   </div>
                 </div>
