@@ -190,10 +190,10 @@ export function ItineraryDestinationCard({
               >
                 {isFinished ? (
                   <>
-                    Completed <Check className="h-3.5 w-3.5" />
+                    Finished <Check className="h-3.5 w-3.5" />
                   </>
                 ) : (
-                  'Complete Visit'
+                  'Finish'
                 )}
               </Button>
             )}
@@ -219,7 +219,7 @@ export function ItineraryDestinationCard({
                         onFinish();
                       }}
                     >
-                      {isFinished ? 'Mark as unfinished' : 'Complete Visit'}
+                      {isFinished ? 'Mark as unfinished' : 'Finish'}
                     </DropdownMenuItem>
                   )}
                   {onDelete && (
@@ -308,10 +308,10 @@ export function ItineraryDestinationCard({
             >
               {isFinished ? (
                 <>
-                  Completed <Check className="h-3.5 w-3.5" />
+                  Finished <Check className="h-3.5 w-3.5" />
                 </>
               ) : (
-                'Complete Visit'
+                'Finish'
               )}
             </Button>
           </div>
