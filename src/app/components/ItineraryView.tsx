@@ -106,6 +106,34 @@ export function ItineraryView({
     });
     return computed;
   };
+  const upsertStop = (
+    source: ItineraryStop[],
+    day: number,
+    sequence: number,
+    destinationId: string,
+    patch: Partial<Pick<ItineraryStop, 'startTime' | 'endTime'>>
+  ): ItineraryStop[] => {
+    const key = toStopKey(day, sequence, destinationId);
+    const next = [...source];
+    const idx = next.findIndex((stop) => toStopKey(stop.day, stop.sequence, stop.destinationId) === key);
+    if (idx < 0) {
+      next.push({
+        destinationId,
+        day,
+        sequence,
+        startTime: sanitizeStopTime(patch.startTime ?? ''),
+        endTime: sanitizeStopTime(patch.endTime ?? ''),
+      });
+      return next;
+    }
+    const current = next[idx];
+    next[idx] = {
+      ...current,
+      startTime: patch.startTime !== undefined ? sanitizeStopTime(patch.startTime) : current.startTime,
+      endTime: patch.endTime !== undefined ? sanitizeStopTime(patch.endTime) : current.endTime,
+    };
+    return next;
+  };
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
@@ -345,6 +373,8 @@ export function ItineraryView({
     });
     onRemoveDestination(destinationId);
   };
+  const getStopForEntry = (day: number, sequence: number, destinationId: string): ItineraryStop | undefined =>
+    stops.find((stop) => toStopKey(stop.day, stop.sequence, stop.destinationId) === toStopKey(day, sequence, destinationId));
 
   const openSaveDialog = () => {
     const defaultName = `Bulusan Trip ${new Date().toLocaleDateString()}`;
@@ -1016,6 +1046,7 @@ export function ItineraryView({
                   })()}
                   {(() => {
                     const durationHours = getDestinationDurationHours(dest);
+                    const stop = getStopForEntry(day, index, dest.id);
                     const subInterestLabels = formatInterestList(dest.subInterests);
                     const showRating =
                       Boolean(onRateDestination) &&
@@ -1037,6 +1068,21 @@ export function ItineraryView({
                         showActionsMenu={isSavedItinerary}
                         onEdit={() => setSelectedDestination(dest)}
                         onDelete={() => handleRemoveClick(dest.id, getEntryKey(dest, day, index))}
+                        startTime={stop?.startTime}
+                        endTime={stop?.endTime}
+                        canEditTimes
+                        onStartTimeChange={(value) => {
+                          const nextValue = sanitizeStopTime(value);
+                          setStops((previous) =>
+                            upsertStop(previous, day, index, dest.id, { startTime: nextValue })
+                          );
+                        }}
+                        onEndTimeChange={(value) => {
+                          const nextValue = sanitizeStopTime(value);
+                          setStops((previous) =>
+                            upsertStop(previous, day, index, dest.id, { endTime: nextValue })
+                          );
+                        }}
                         footerContent={showRating ? (
                           <div className="space-y-1">
                             <p className="text-xs font-medium text-slate-600">Your rating</p>
