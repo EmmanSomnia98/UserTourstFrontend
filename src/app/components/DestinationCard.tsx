@@ -83,7 +83,9 @@ export function DestinationCard({
             )}
           </div>
           
-          <p className="text-sm text-gray-600 line-clamp-2">{destination.description}</p>
+          <p className="line-clamp-3 min-h-[3.75rem] overflow-hidden text-sm leading-5 text-gray-600">
+            {destination.description}
+          </p>
           {(() => {
             const subInterestLabels = formatInterestList(destination.subInterests);
             if (subInterestLabels.length === 0) return null;

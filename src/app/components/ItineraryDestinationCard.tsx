@@ -137,7 +137,9 @@ export function ItineraryDestinationCard({
               </div>
             </div>
 
-            <p className="text-sm leading-relaxed text-slate-700">{destination.description}</p>
+            <p className="line-clamp-3 min-h-[3.75rem] overflow-hidden text-sm leading-5 text-slate-700">
+              {destination.description}
+            </p>
 
             {canEditTimes && onStartTimeChange && onEndTimeChange ? (
               <div className="rounded-md border border-slate-300 bg-slate-100/80 px-3 py-2">
