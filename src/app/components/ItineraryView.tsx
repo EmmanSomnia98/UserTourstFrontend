@@ -1134,15 +1134,6 @@ export function ItineraryView({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {onViewSavedItineraries && (
-              <Button
-                variant="outline"
-                className="transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md"
-                onClick={onViewSavedItineraries}
-              >
-                View My Itineraries
-              </Button>
-            )}
             <Button
               variant="outline"
               onClick={openSaveDialog}
@@ -1226,6 +1217,18 @@ export function ItineraryView({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
+            {onViewSavedItineraries && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSaveSuccess(false);
+                  onViewSavedItineraries();
+                }}
+                size="sm"
+              >
+                View My Itineraries
+              </Button>
+            )}
             <Button
               onClick={() => setSaveSuccess(false)}
               size="sm"
