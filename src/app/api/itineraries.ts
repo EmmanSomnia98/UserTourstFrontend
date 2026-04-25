@@ -489,6 +489,32 @@ function normalizeOutgoingStops(stops: ItineraryStop[] | undefined): ItinerarySt
     });
 }
 
+function normalizeLocalStops(stops: ItineraryStop[] | undefined): ItineraryStop[] {
+  if (!Array.isArray(stops)) return [];
+  return stops
+    .map((stop) => {
+      const destinationId = normalizeIdentifier(stop.destinationId);
+      if (!destinationId) return null;
+      const day = Math.max(1, Math.round(Number(stop.day) || 0));
+      const sequence = Math.max(0, Math.round(Number(stop.sequence) || 0));
+      const startTime = typeof stop.startTime === 'string' ? stop.startTime.trim() : '';
+      const endTime = typeof stop.endTime === 'string' ? stop.endTime.trim() : '';
+      if (!isValidTimeLabel(startTime) || !isValidTimeLabel(endTime)) return null;
+      return {
+        destinationId,
+        day,
+        sequence,
+        startTime,
+        endTime,
+      } as ItineraryStop;
+    })
+    .filter((stop): stop is ItineraryStop => Boolean(stop))
+    .sort((a, b) => {
+      if (a.day !== b.day) return a.day - b.day;
+      return a.sequence - b.sequence;
+    });
+}
+
 function mapBackendItinerary(itinerary: BackendItinerary, index: number): SavedItinerary {
   const destinations = toDestinationList(itinerary.destinations);
   const durationFromDestinations = destinations.reduce((sum, dest) => sum + Number(dest.duration || 0), 0);
@@ -610,11 +636,13 @@ function mergeSegmentedItineraries(items: SavedItinerary[]): SavedItinerary[] {
     const maxTripDays = sorted.reduce((max, item) => Math.max(max, item.tripDays || 0), 0);
     const summedDestinationCost = destinations.reduce((sum, destination) => sum + Number(destination.estimatedCost || 0), 0);
     const maxReportedCost = sorted.reduce((max, item) => Math.max(max, Number(item.totalCost || 0)), 0);
+    const mergedStops = sorted.find((item) => (item.stops?.length ?? 0) > 0)?.stops;
     const base = sorted[0];
 
     merged.push({
       ...base,
       destinations,
+      stops: mergedStops,
       totalDuration,
       tripDays: maxTripDays > 0 ? maxTripDays : derivedTripDays,
       totalCost: Math.max(summedDestinationCost, maxReportedCost),
@@ -718,7 +746,8 @@ export async function createItinerary(itinerary: SavedItinerary): Promise<SavedI
   if (itinerary.destinations.length > 0 && payloadDestinations.length === 0) {
     throw new Error('Unable to save itinerary: destination IDs are missing.');
   }
-  const payloadStops = normalizeOutgoingStops(itinerary.stops);
+  const localStops = normalizeLocalStops(itinerary.stops);
+  const payloadStops = normalizeOutgoingStops(localStops);
 
   const payload = {
     name: itinerary.name,
@@ -730,6 +759,7 @@ export async function createItinerary(itinerary: SavedItinerary): Promise<SavedI
     days: itinerary.tripDays,
     selectedDates: itinerary.selectedDates ?? [],
     stops: payloadStops,
+    schedule: payloadStops,
     destinations: payloadDestinations,
     destinationIds: payloadDestinations.map((item) => item.destination),
   };
@@ -743,7 +773,12 @@ export async function createItinerary(itinerary: SavedItinerary): Promise<SavedI
     });
     const created = normalizeCreatedItinerary(response);
     if (!created) return null;
-    return mapBackendItinerary(created, 0);
+    const mapped = mapBackendItinerary(created, 0);
+    if ((mapped.stops?.length ?? 0) > 0 || localStops.length === 0) return mapped;
+    return {
+      ...mapped,
+      stops: localStops,
+    };
   })();
 
   inFlightCreateByKey.set(signature, request);
@@ -784,7 +819,8 @@ export async function updateItinerary(id: string, itinerary: SavedItinerary): Pr
   if (itinerary.destinations.length > 0 && destinationIds.length === 0) {
     throw new Error('Unable to update itinerary: destination IDs are missing.');
   }
-  const payloadStops = normalizeOutgoingStops(itinerary.stops);
+  const localStops = normalizeLocalStops(itinerary.stops);
+  const payloadStops = normalizeOutgoingStops(localStops);
 
   const payload = {
     name: itinerary.name,
@@ -795,13 +831,19 @@ export async function updateItinerary(id: string, itinerary: SavedItinerary): Pr
     destinationIds,
     destinations: destinationIds.map((destinationId) => ({ destination: destinationId })),
     stops: payloadStops,
+    schedule: payloadStops,
   };
 
   try {
     const response = await apiPatch<CreateItineraryResponse>(`/api/itineraries/${encodeURIComponent(id)}`, payload);
     const updated = normalizeCreatedItinerary(response);
     if (!updated) return null;
-    return mapBackendItinerary(updated, 0);
+    const mapped = mapBackendItinerary(updated, 0);
+    if ((mapped.stops?.length ?? 0) > 0 || localStops.length === 0) return mapped;
+    return {
+      ...mapped,
+      stops: localStops,
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error ?? '');
     const isAuthError =

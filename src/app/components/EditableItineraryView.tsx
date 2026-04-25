@@ -665,8 +665,8 @@ export function EditableItineraryView({
                         origin={userLocation}
                         onEdit={() => setSelectedDestination(dest)}
                         onDelete={() => handleRemoveDestination(dest.id)}
-                        startTime={stop.startTime}
-                        endTime={stop.endTime}
+                        startTime={stop?.startTime ?? minutesToTimeInput(dayTimeline[index]?.startMinutes ?? 0)}
+                        endTime={stop?.endTime ?? minutesToTimeInput(dayTimeline[index]?.endMinutes ?? 0)}
                         canEditTimes
                         onStartTimeChange={(value) => {
                           const nextValue = sanitizeStopTime(value);

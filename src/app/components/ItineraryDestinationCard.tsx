@@ -179,7 +179,7 @@ export function ItineraryDestinationCard({
                 type="button"
                 size="sm"
                 variant={isFinished ? 'secondary' : 'outline'}
-                className="h-8 px-2.5 text-xs"
+                className="hidden h-8 px-2.5 text-xs sm:inline-flex"
                 onClick={(event) => {
                   event.stopPropagation();
                   onFinish();
@@ -281,6 +281,23 @@ export function ItineraryDestinationCard({
             {isExpanded ? 'Show Less' : 'Show More'}
           </button>
         </div>
+
+        {showFinishButton && onFinish && (
+          <div className="mt-2 sm:hidden">
+            <Button
+              type="button"
+              size="sm"
+              variant={isFinished ? 'secondary' : 'outline'}
+              className="h-8 px-2.5 text-xs"
+              onClick={(event) => {
+                event.stopPropagation();
+                onFinish();
+              }}
+            >
+              {isFinished ? 'Finished' : 'Finish'}
+            </Button>
+          </div>
+        )}
 
         {footerContent && <div className="mt-3">{footerContent}</div>}
 
