@@ -141,6 +141,7 @@ export function ItineraryDestinationCard({
     destination.address?.city ? `City: ${destination.address.city}` : null,
     destination.address?.province ? `Province: ${destination.address.province}` : null,
   ].filter((line): line is string => Boolean(line && line.trim()));
+  const showEditableTimes = canEditTimes && onStartTimeChange && onEndTimeChange;
 
   return (
     <div className="space-y-2">
@@ -159,7 +160,29 @@ export function ItineraryDestinationCard({
               <h4 className="cursor-pointer truncate text-base font-semibold text-slate-900 sm:text-lg" onClick={onEdit}>
                 {destination.name}
               </h4>
-              {timeLabel && <p className="text-sm font-medium text-sky-700">{timeLabel}</p>}
+              {showEditableTimes ? (
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <Input
+                    type="time"
+                    value={startTime ?? ''}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={(event) => onStartTimeChange(event.target.value)}
+                    className="h-8 w-32 text-xs"
+                    aria-label={`Start time for ${destination.name}`}
+                  />
+                  <span className="text-xs text-slate-500">-</span>
+                  <Input
+                    type="time"
+                    value={endTime ?? ''}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={(event) => onEndTimeChange(event.target.value)}
+                    className="h-8 w-32 text-xs"
+                    aria-label={`End time for ${destination.name}`}
+                  />
+                </div>
+              ) : (
+                timeLabel && <p className="text-sm font-medium text-sky-700">{timeLabel}</p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -276,27 +299,6 @@ export function ItineraryDestinationCard({
         {isExpanded && (
           <div className="mt-3 space-y-3 text-xs text-slate-600">
             <p className="text-sm leading-relaxed text-slate-700">{destination.description}</p>
-
-            {canEditTimes && onStartTimeChange && onEndTimeChange && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-slate-700">Time</span>
-                <Input
-                  type="time"
-                  value={startTime ?? ''}
-                  onClick={(event) => event.stopPropagation()}
-                  onChange={(event) => onStartTimeChange(event.target.value)}
-                  className="h-8 w-32 text-xs"
-                />
-                <span>-</span>
-                <Input
-                  type="time"
-                  value={endTime ?? ''}
-                  onClick={(event) => event.stopPropagation()}
-                  onChange={(event) => onEndTimeChange(event.target.value)}
-                  className="h-8 w-32 text-xs"
-                />
-              </div>
-            )}
 
             <div className="space-y-1">
               <p className="font-medium text-slate-700">Location details</p>
