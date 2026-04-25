@@ -1,5 +1,5 @@
 import { ReactNode, useMemo, useState } from 'react';
-import { Clock3, Car, MoreHorizontal, PersonStanding, Bike, ExternalLink, Tag, Wallet } from 'lucide-react';
+import { Clock3, Car, MoreHorizontal, PersonStanding, Bike, ExternalLink, Tag, Wallet, Check } from 'lucide-react';
 import { Destination } from '@/app/types/destination';
 import { formatDistanceKm, estimateMinutes, GeoPoint, haversineKm } from '@/app/utils/travel';
 import { Card } from '@/app/components/ui/card';
@@ -173,19 +173,28 @@ export function ItineraryDestinationCard({
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             {showFinishButton && onFinish && (
               <Button
                 type="button"
-                size="sm"
-                variant={isFinished ? 'secondary' : 'outline'}
-                className="hidden h-8 px-2.5 text-xs sm:inline-flex"
+                variant="default"
+                className={`hidden min-h-10 rounded-full px-4 py-2 text-sm font-semibold text-white sm:inline-flex ${
+                  isFinished
+                    ? 'bg-emerald-600/80 hover:bg-emerald-600/80 shadow-none'
+                    : 'bg-sky-600 hover:bg-sky-700 shadow-sm hover:scale-105 hover:shadow-md active:scale-95'
+                }`}
                 onClick={(event) => {
                   event.stopPropagation();
                   onFinish();
                 }}
               >
-                {isFinished ? 'Finished' : 'Finish'}
+                {isFinished ? (
+                  <>
+                    Completed <Check className="h-3.5 w-3.5" />
+                  </>
+                ) : (
+                  'Complete Visit'
+                )}
               </Button>
             )}
             {showActionsMenu && (onFinish || onDelete) && (
@@ -195,7 +204,7 @@ export function ItineraryDestinationCard({
                     type="button"
                     size="icon"
                     variant="ghost"
-                    className="h-8 w-8 flex-shrink-0"
+                    className="h-8 w-8 flex-shrink-0 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800"
                     onClick={(event) => event.stopPropagation()}
                     aria-label="Open destination actions"
                   >
@@ -210,7 +219,7 @@ export function ItineraryDestinationCard({
                         onFinish();
                       }}
                     >
-                      {isFinished ? 'Mark as unfinished' : 'Finish'}
+                      {isFinished ? 'Mark as unfinished' : 'Complete Visit'}
                     </DropdownMenuItem>
                   )}
                   {onDelete && (
@@ -283,18 +292,27 @@ export function ItineraryDestinationCard({
         </div>
 
         {showFinishButton && onFinish && (
-          <div className="mt-2 sm:hidden">
+          <div className="mt-3 sm:hidden">
             <Button
               type="button"
-              size="sm"
-              variant={isFinished ? 'secondary' : 'outline'}
-              className="h-8 px-2.5 text-xs"
+              variant="default"
+              className={`min-h-11 min-w-[10rem] rounded-full px-4 py-2.5 text-sm font-semibold text-white ${
+                isFinished
+                  ? 'bg-emerald-600/80 hover:bg-emerald-600/80 shadow-none'
+                  : 'bg-sky-600 hover:bg-sky-700 shadow-sm hover:shadow-md active:scale-95'
+              }`}
               onClick={(event) => {
                 event.stopPropagation();
                 onFinish();
               }}
             >
-              {isFinished ? 'Finished' : 'Finish'}
+              {isFinished ? (
+                <>
+                  Completed <Check className="h-3.5 w-3.5" />
+                </>
+              ) : (
+                'Complete Visit'
+              )}
             </Button>
           </div>
         )}
