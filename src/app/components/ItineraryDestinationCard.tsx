@@ -1,17 +1,12 @@
-import { ReactNode, useMemo, useState } from 'react';
-import { Clock3, Car, MoreHorizontal, PersonStanding, Bike, ExternalLink, Tag, Wallet, Check } from 'lucide-react';
+import { ReactNode } from 'react';
+import { Clock3, Trash2, Wallet, Check } from 'lucide-react';
 import { Destination } from '@/app/types/destination';
-import { formatDistanceKm, estimateMinutes, GeoPoint, haversineKm } from '@/app/utils/travel';
+import { GeoPoint } from '@/app/utils/travel';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { TimeRangeEditor } from '@/app/components/TimeRangeEditor';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/app/components/ui/dropdown-menu';
+import { TravelModeBadges } from '@/app/components/TravelModeBadges';
+import { DestinationLocationPanel } from '@/app/components/DestinationLocationPanel';
 
 type ItineraryDestinationCardProps = {
   destination: Destination;
@@ -36,30 +31,6 @@ type ItineraryDestinationCardProps = {
   extraContent?: ReactNode;
 };
 
-type TransportMode = 'walking' | 'two-wheeler' | 'driving';
-
-type TransportOption = {
-  mode: TransportMode;
-  label: string;
-  durationMin: number;
-  distanceLabel: string;
-  directionsUrl: string;
-};
-
-function formatDuration(minutes: number): string {
-  if (!Number.isFinite(minutes) || minutes <= 0) return 'N/A';
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.floor(minutes / 60);
-  const remaining = minutes % 60;
-  return remaining === 0 ? `${hours}h` : `${hours}h ${remaining}m`;
-}
-
-function hasValidCoordinates(destination: Destination): boolean {
-  const lat = destination.location?.lat;
-  const lng = destination.location?.lng;
-  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
-}
-
 export function ItineraryDestinationCard({
   destination,
   timeLabel,
@@ -82,85 +53,94 @@ export function ItineraryDestinationCard({
   footerContent,
   extraContent,
 }: ItineraryDestinationCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const hasCoordinates = hasValidCoordinates(destination);
-  const hasOrigin =
-    origin != null &&
-    Number.isFinite(origin.lat) &&
-    Number.isFinite(origin.lng) &&
-    origin.lat >= -90 &&
-    origin.lat <= 90 &&
-    origin.lng >= -180 &&
-    origin.lng <= 180;
+  const formatTimeForDisplay = (value?: string): string | null => {
+    if (!value) return null;
+    const trimmed = value.trim();
+    const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(trimmed);
+    if (!match) return trimmed;
+    const hours24 = Number(match[1]);
+    const minutes = match[2];
+    const period = hours24 >= 12 ? 'PM' : 'AM';
+    const hours12 = hours24 % 12 || 12;
+    return `${hours12}:${minutes} ${period}`;
+  };
 
-  const transportOptions = useMemo<TransportOption[]>(() => {
-    if (!hasCoordinates || !hasOrigin || !origin) return [];
-    const distanceKm = haversineKm(origin, destination.location);
-    const distanceLabel = formatDistanceKm(distanceKm);
-    const originCoords = `${origin.lat},${origin.lng}`;
-    const destinationCoords = `${destination.location.lat},${destination.location.lng}`;
-    return [
-      {
-        mode: 'driving',
-        label: 'Drive',
-        durationMin: estimateMinutes(distanceKm, 30),
-        distanceLabel,
-        directionsUrl: `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originCoords)}&destination=${encodeURIComponent(destinationCoords)}&travelmode=driving`,
-      },
-      {
-        mode: 'two-wheeler',
-        label: 'Two-wheeler',
-        durationMin: estimateMinutes(distanceKm, 40),
-        distanceLabel,
-        directionsUrl: `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originCoords)}&destination=${encodeURIComponent(destinationCoords)}&travelmode=bicycling`,
-      },
-      {
-        mode: 'walking',
-        label: 'Walk',
-        durationMin: estimateMinutes(distanceKm, 5),
-        distanceLabel,
-        directionsUrl: `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originCoords)}&destination=${encodeURIComponent(destinationCoords)}&travelmode=walking`,
-      },
-    ];
-  }, [destination.location, hasCoordinates, hasOrigin, origin]);
-
-  const recommendedTransport = useMemo(() => {
-    if (transportOptions.length === 0) return null;
-    return [...transportOptions].sort((left, right) => left.durationMin - right.durationMin)[0];
-  }, [transportOptions]);
-
-  const fallbackMapUrl =
-    hasCoordinates && !hasOrigin
-      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${destination.location.lat},${destination.location.lng}`)}`
-      : null;
-
-  const fullAddressLines = [
-    destination.address?.fullAddress,
-    destination.address?.purok ? `Purok: ${destination.address.purok}` : null,
-    destination.address?.barangay ? `Barangay: ${destination.address.barangay}` : null,
-    destination.address?.city ? `City: ${destination.address.city}` : null,
-    destination.address?.province ? `Province: ${destination.address.province}` : null,
-  ].filter((line): line is string => Boolean(line && line.trim()));
-  const showEditableTimes = canEditTimes && onStartTimeChange && onEndTimeChange;
+  const startLabel = formatTimeForDisplay(startTime);
+  const endLabel = formatTimeForDisplay(endTime);
+  const scheduledTimeLabel =
+    timeLabel?.trim() ||
+    (startLabel && endLabel ? `${startLabel} - ${endLabel}` : startLabel || endLabel || 'Not set');
+  const subInterestsLabel = tags.length > 0 ? tags.join(', ') : 'Not specified';
 
   return (
     <div className="space-y-2">
       {transferLabel && <p className="text-xs text-slate-500">{transferLabel}</p>}
-      <Card className={`p-4 shadow-sm transition hover:shadow-md ${isFinished ? 'bg-emerald-50/40' : 'bg-white'}`}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            {destination.image && (
+      <Card className={`p-3 shadow-sm transition hover:shadow-md sm:p-4 ${isFinished ? 'bg-emerald-50/40' : 'bg-slate-50/70'}`}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[104px_minmax(0,1fr)] sm:gap-4">
+          <div className="sm:pt-1">
+            {destination.image ? (
               <img
                 src={destination.image}
                 alt={destination.name}
-                className="h-14 w-14 flex-shrink-0 rounded-md object-cover sm:h-16 sm:w-16"
+                className="h-24 w-24 rounded-lg object-cover sm:h-[96px] sm:w-[96px]"
               />
+            ) : (
+              <div className="h-24 w-24 rounded-lg bg-slate-200 sm:h-[96px] sm:w-[96px]" />
             )}
-            <div className="min-w-0">
-              <h4 className="cursor-pointer truncate text-base font-semibold text-slate-900 sm:text-lg" onClick={onEdit}>
-                {destination.name}
-              </h4>
-              {showEditableTimes ? (
+          </div>
+
+          <div className="space-y-3 min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h4 className="cursor-pointer text-2xl font-bold leading-tight text-slate-900" onClick={onEdit}>
+                  {destination.name}
+                </h4>
+              </div>
+              <div className="flex flex-shrink-0 items-center gap-2">
+                {showFinishButton && onFinish && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="default"
+                    className={`h-9 px-3 text-sm font-semibold text-white ${
+                      isFinished ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'
+                    }`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onFinish();
+                    }}
+                  >
+                    {isFinished ? (
+                      <>
+                        Finished <Check className="h-3.5 w-3.5" />
+                      </>
+                    ) : (
+                      'Finish'
+                    )}
+                  </Button>
+                )}
+                {onDelete && showActionsMenu && (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDelete();
+                    }}
+                    aria-label={`Remove ${destination.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <p className="text-sm leading-relaxed text-slate-700">{destination.description}</p>
+
+            {canEditTimes && onStartTimeChange && onEndTimeChange ? (
+              <div className="rounded-md border border-slate-300 bg-slate-100/80 px-3 py-2">
                 <TimeRangeEditor
                   startTime={startTime ?? ''}
                   endTime={endTime ?? ''}
@@ -168,219 +148,35 @@ export function ItineraryDestinationCard({
                   onEndTimeChange={onEndTimeChange}
                   label={destination.name}
                 />
-              ) : (
-                timeLabel && <p className="text-sm font-medium text-sky-700">{timeLabel}</p>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {showFinishButton && onFinish && (
-              <Button
-                type="button"
-                variant="default"
-                className={`hidden min-h-10 rounded-full px-4 py-2 text-sm font-semibold text-white sm:inline-flex ${
-                  isFinished
-                    ? 'bg-emerald-600/80 hover:bg-emerald-600/80 shadow-none'
-                    : 'bg-sky-600 hover:bg-sky-700 shadow-sm hover:scale-105 hover:shadow-md active:scale-95'
-                }`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onFinish();
-                }}
-              >
-                {isFinished ? (
-                  <>
-                    Finished <Check className="h-3.5 w-3.5" />
-                  </>
-                ) : (
-                  'Finish'
-                )}
-              </Button>
+              </div>
+            ) : (
+              <div className="rounded-md border border-slate-300 bg-slate-100/80 px-3 py-2 text-sm font-medium text-slate-700">
+                Scheduled time: {scheduledTimeLabel}
+              </div>
             )}
-            {showActionsMenu && (onFinish || onDelete) && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 flex-shrink-0 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-800"
-                    onClick={(event) => event.stopPropagation()}
-                    aria-label="Open destination actions"
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {onFinish && (
-                    <DropdownMenuItem
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onFinish();
-                      }}
-                    >
-                      {isFinished ? 'Mark as unfinished' : 'Finish'}
-                    </DropdownMenuItem>
-                  )}
-                  {onDelete && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onDelete();
-                        }}
-                      >
-                        Delete
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
-        </div>
 
-        <p className="mt-3 line-clamp-2 text-sm text-slate-600">{destination.description}</p>
+            <p className="text-sm text-slate-700">
+              <span className="font-medium">Sub-interests:</span> {subInterestsLabel}
+            </p>
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-slate-600">
-          <span className="inline-flex items-center gap-1">
-            <Clock3 className="h-3.5 w-3.5" />
-            {durationLabel}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Wallet className="h-3.5 w-3.5" />
-            {priceLabel}
-          </span>
-          {tags.slice(0, 3).map((tag) => (
-            <span key={`${destination.id}-tag-${tag}`} className="inline-flex items-center gap-1">
-              <Tag className="h-3.5 w-3.5" />
-              {tag}
-            </span>
-          ))}
-        </div>
-
-        <div className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-700">
-          {recommendedTransport ? (
-            <a
-              href={recommendedTransport.directionsUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 hover:text-slate-900"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <Car className="h-3.5 w-3.5" />
-              <span>{formatDuration(recommendedTransport.durationMin)} {recommendedTransport.label.toLowerCase()}</span>
-            </a>
-          ) : (
-            <span className="text-slate-500">Enable location to view recommended transport.</span>
-          )}
-        </div>
-
-        <div className="mt-3">
-          <button
-            type="button"
-            className="text-xs font-medium text-slate-700 hover:text-slate-900"
-            onClick={(event) => {
-              event.stopPropagation();
-              setIsExpanded((previous) => !previous);
-            }}
-          >
-            {isExpanded ? 'Show Less' : 'Show More'}
-          </button>
-        </div>
-
-        {showFinishButton && onFinish && (
-          <div className="mt-3 sm:hidden">
-            <Button
-              type="button"
-              variant="default"
-              className={`min-h-11 min-w-[10rem] rounded-full px-4 py-2.5 text-sm font-semibold text-white ${
-                isFinished
-                  ? 'bg-emerald-600/80 hover:bg-emerald-600/80 shadow-none'
-                  : 'bg-sky-600 hover:bg-sky-700 shadow-sm hover:shadow-md active:scale-95'
-              }`}
-              onClick={(event) => {
-                event.stopPropagation();
-                onFinish();
-              }}
-            >
-              {isFinished ? (
-                <>
-                  Finished <Check className="h-3.5 w-3.5" />
-                </>
-              ) : (
-                'Finish'
-              )}
-            </Button>
-          </div>
-        )}
-
-        {footerContent && <div className="mt-3">{footerContent}</div>}
-
-        {isExpanded && (
-          <div className="mt-3 space-y-3 text-xs text-slate-600">
-            <p className="text-sm leading-relaxed text-slate-700">{destination.description}</p>
-
-            <div className="space-y-1">
-              <p className="font-medium text-slate-700">Location details</p>
-              {fullAddressLines.length > 0 ? (
-                fullAddressLines.map((line, index) => (
-                  <p key={`${destination.id}-address-${index}`} className="break-words">
-                    {line}
-                  </p>
-                ))
-              ) : (
-                <p className="text-slate-500">No address details provided.</p>
-              )}
-              {hasCoordinates && (
-                <p className="text-slate-500">
-                  {destination.location.lat.toFixed(6)}, {destination.location.lng.toFixed(6)}
-                </p>
-              )}
-              {(recommendedTransport?.directionsUrl || fallbackMapUrl) && (
-                <a
-                  href={recommendedTransport?.directionsUrl ?? fallbackMapUrl ?? '#'}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-sky-700 hover:underline"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  View on Google Maps <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              )}
+            <div className="flex items-center gap-4 text-xs text-slate-500">
+              <span className="inline-flex items-center gap-1">
+                <Wallet className="h-3.5 w-3.5" />
+                {priceLabel}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Clock3 className="h-3.5 w-3.5" />
+                Average Visit Time: {durationLabel}
+              </span>
             </div>
 
-            <div className="space-y-1">
-              <p className="font-medium text-slate-700">All transport options</p>
-              {transportOptions.length > 0 ? (
-                transportOptions.map((option) => (
-                  <a
-                    key={`${destination.id}-${option.mode}`}
-                    href={option.directionsUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-between rounded-md bg-slate-50 px-2 py-1.5 hover:bg-slate-100"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      {option.mode === 'walking' && <PersonStanding className="h-3.5 w-3.5" />}
-                      {option.mode === 'two-wheeler' && <Bike className="h-3.5 w-3.5" />}
-                      {option.mode === 'driving' && <Car className="h-3.5 w-3.5" />}
-                      {option.label}
-                    </span>
-                    <span className="text-slate-500">{formatDuration(option.durationMin)} ({option.distanceLabel})</span>
-                  </a>
-                ))
-              ) : (
-                <p className="text-slate-500">Transport estimates require location access.</p>
-              )}
-            </div>
+            <TravelModeBadges destination={destination} origin={origin} variant="strict-itinerary" />
+            <DestinationLocationPanel destination={destination} variant="strict-itinerary" />
 
-            {extraContent}
+            {footerContent && <div>{footerContent}</div>}
+            {extraContent && <div>{extraContent}</div>}
           </div>
-        )}
+        </div>
       </Card>
     </div>
   );

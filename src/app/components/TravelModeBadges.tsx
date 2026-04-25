@@ -14,6 +14,7 @@ import {
 type TravelModeBadgesProps = {
   destination: Destination;
   origin?: GeoPoint | null;
+  variant?: 'default' | 'strict-itinerary';
 };
 
 type ModeState = {
@@ -65,7 +66,7 @@ function isRoutingProviderUnavailable(error: unknown): boolean {
   return message.includes('Request failed (4') || message.includes('Request failed (5') || message.includes('Routing API error:');
 }
 
-export function TravelModeBadges({ destination, origin }: TravelModeBadgesProps) {
+export function TravelModeBadges({ destination, origin, variant = 'default' }: TravelModeBadgesProps) {
   // Keep routing API opt-in so local/dev runs don't flood the console when backend routing is unavailable.
   const canUseRoutingApi = import.meta.env.VITE_ENABLE_ROUTING_API === 'true';
   const hasLocation = hasValidLocation(destination);
@@ -218,17 +219,22 @@ export function TravelModeBadges({ destination, origin }: TravelModeBadgesProps)
     const modeLabel =
       mode === 'walking' ? 'Walk' : mode === 'two-wheeler' ? 'Two-wheeler' : 'Drive';
 
+    const strict = variant === 'strict-itinerary';
     return (
       <button
         type="button"
-        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1 shadow-sm transition hover:bg-slate-50"
+        className={
+          strict
+            ? 'inline-flex h-9 flex-shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 transition hover:bg-slate-50'
+            : 'inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1 shadow-sm transition hover:bg-slate-50'
+        }
         onClick={() => window.open(directionsUrl, '_blank', 'noopener,noreferrer')}
         title="Open live directions in Google Maps"
       >
         {icon}
-        <span>{modeLabel}</span>
-        <span>{state.loading ? '...' : `${minutes} min`}</span>
-        <span className="text-slate-400">({distanceLabel})</span>
+        <span className={strict ? 'font-semibold text-slate-700' : ''}>{modeLabel}</span>
+        <span className={strict ? 'font-bold text-slate-700' : ''}>{state.loading ? '...' : `${minutes} min`}</span>
+        <span className={strict ? 'font-semibold text-slate-400' : 'text-slate-400'}>({distanceLabel})</span>
       </button>
     );
   };
@@ -240,8 +246,9 @@ export function TravelModeBadges({ destination, origin }: TravelModeBadgesProps)
     return <div className="text-xs text-amber-700">Enable location to see accurate travel distance and time.</div>;
   }
 
+  const strict = variant === 'strict-itinerary';
   return (
-    <div className="flex flex-wrap gap-2 text-xs text-slate-700">
+    <div className={strict ? 'flex flex-nowrap gap-2 overflow-x-auto pb-1 text-xs text-slate-700' : 'flex flex-wrap gap-2 text-xs text-slate-700'}>
       {renderBadge(<PersonStanding className="h-4 w-4 text-slate-600" />, walk, fallback.walk, 'walking')}
       {renderBadge(<TwoWheelerIcon className="h-4 w-4 text-slate-600" />, bike, fallback.bike, 'two-wheeler')}
       {renderBadge(<Car className="h-4 w-4 text-slate-600" />, drive, fallback.drive, 'driving')}
