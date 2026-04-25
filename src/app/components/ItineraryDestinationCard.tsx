@@ -4,7 +4,7 @@ import { Destination } from '@/app/types/destination';
 import { formatDistanceKm, estimateMinutes, GeoPoint, haversineKm } from '@/app/utils/travel';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
-import { Input } from '@/app/components/ui/input';
+import { TimeRangeEditor } from '@/app/components/TimeRangeEditor';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -161,25 +161,13 @@ export function ItineraryDestinationCard({
                 {destination.name}
               </h4>
               {showEditableTimes ? (
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <Input
-                    type="time"
-                    value={startTime ?? ''}
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={(event) => onStartTimeChange(event.target.value)}
-                    className="h-8 w-32 text-xs"
-                    aria-label={`Start time for ${destination.name}`}
-                  />
-                  <span className="text-xs text-slate-500">-</span>
-                  <Input
-                    type="time"
-                    value={endTime ?? ''}
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={(event) => onEndTimeChange(event.target.value)}
-                    className="h-8 w-32 text-xs"
-                    aria-label={`End time for ${destination.name}`}
-                  />
-                </div>
+                <TimeRangeEditor
+                  startTime={startTime ?? ''}
+                  endTime={endTime ?? ''}
+                  onStartTimeChange={onStartTimeChange}
+                  onEndTimeChange={onEndTimeChange}
+                  label={destination.name}
+                />
               ) : (
                 timeLabel && <p className="text-sm font-medium text-sky-700">{timeLabel}</p>
               )}

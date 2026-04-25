@@ -106,35 +106,6 @@ export function ItineraryView({
     });
     return computed;
   };
-  const upsertStop = (
-    stops: ItineraryStop[],
-    day: number,
-    sequence: number,
-    destinationId: string,
-    patch: Partial<Pick<ItineraryStop, 'startTime' | 'endTime'>>
-  ): ItineraryStop[] => {
-    const key = toStopKey(day, sequence, destinationId);
-    const next = [...stops];
-    const idx = next.findIndex((stop) => toStopKey(stop.day, stop.sequence, stop.destinationId) === key);
-    if (idx < 0) {
-      next.push({
-        destinationId,
-        day,
-        sequence,
-        startTime: sanitizeStopTime(patch.startTime ?? ''),
-        endTime: sanitizeStopTime(patch.endTime ?? ''),
-      });
-      return next;
-    }
-    const current = next[idx];
-    next[idx] = {
-      ...current,
-      startTime: patch.startTime !== undefined ? sanitizeStopTime(patch.startTime) : current.startTime,
-      endTime: patch.endTime !== undefined ? sanitizeStopTime(patch.endTime) : current.endTime,
-    };
-    return next;
-  };
-
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
@@ -935,13 +906,6 @@ export function ItineraryView({
             const dayRouteUrl = buildGoogleMapsRouteUrl(dayDestinations, { origin: userLocation });
             const daySegments = getDaySegmentDistances(dayDestinations);
             const dayTimeline = buildDayTimeline(dayDestinations, { day, stops });
-            const getStopForEntry = (destinationId: string, sequence: number) =>
-              stops.find(
-                (stop) =>
-                  stop.day === day &&
-                  stop.sequence === sequence &&
-                  stop.destinationId === destinationId
-              );
             return (
           <div className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1051,7 +1015,6 @@ export function ItineraryView({
                     );
                   })()}
                   {(() => {
-                    const stop = getStopForEntry(dest.id, index);
                     const durationHours = getDestinationDurationHours(dest);
                     const subInterestLabels = formatInterestList(dest.subInterests);
                     const showRating =
@@ -1074,21 +1037,6 @@ export function ItineraryView({
                         showActionsMenu={isSavedItinerary}
                         onEdit={() => setSelectedDestination(dest)}
                         onDelete={() => handleRemoveClick(dest.id, getEntryKey(dest, day, index))}
-                        startTime={stop?.startTime}
-                        endTime={stop?.endTime}
-                        canEditTimes={Boolean(stop)}
-                        onStartTimeChange={(value) => {
-                          const nextValue = sanitizeStopTime(value);
-                          setStops((previous) =>
-                            upsertStop(previous, day, index, dest.id, { startTime: nextValue })
-                          );
-                        }}
-                        onEndTimeChange={(value) => {
-                          const nextValue = sanitizeStopTime(value);
-                          setStops((previous) =>
-                            upsertStop(previous, day, index, dest.id, { endTime: nextValue })
-                          );
-                        }}
                         footerContent={showRating ? (
                           <div className="space-y-1">
                             <p className="text-xs font-medium text-slate-600">Your rating</p>
